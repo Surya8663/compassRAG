@@ -32,7 +32,12 @@ class EmbeddingService:
 
             self._local_model: Any = SentenceTransformer(self.model_name)
             self._openai_client: Any = None
-            self.dimension = self._local_model.get_sentence_embedding_dimension() or 384
+            if hasattr(self._local_model, "get_embedding_dimension"):
+                self.dimension = self._local_model.get_embedding_dimension() or 384
+            else:
+                self.dimension = (
+                    self._local_model.get_sentence_embedding_dimension() or 384
+                )
         elif self.provider == "openai":
             self.model_name = self.settings.OPENAI_EMBEDDING_MODEL
             logger.info("Initializing OpenAI client: %s", self.model_name)
