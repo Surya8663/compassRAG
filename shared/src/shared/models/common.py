@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # ==============================================================================
 # ENUMS (Strict String Enums)
@@ -123,7 +123,9 @@ class CorrectionVerdict(BaseModel):
     """
     Evaluation verdict produced by the self-correcting RAG evaluator.
     """
-    signal_type: SignalType = Field(..., description="Signal evaluated (GROUNDEDNESS/CONTRADICTION)")
+    signal_type: SignalType = Field(
+        ..., description="Signal evaluated (GROUNDEDNESS/CONTRADICTION)"
+    )
     verdict: bool = Field(..., description="Whether check passed (True) or contradicted (False)")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0.0 to 1.0)")
     reasoning: str = Field(..., description="Explanation of evaluation verdict")
@@ -152,3 +154,79 @@ class CorrectionResult(BaseModel):
     refined_query: str | None = Field(
         default=None, description="Suggested refined query if invalid"
     )
+
+
+# ==============================================================================
+# GENERATION & QUERY GATEWAY MODELS
+# ==============================================================================
+
+class Citation(BaseModel):
+    """
+    Grounded citation attributing a portion of the generated answer to a DocumentChunk.
+    """
+    chunk_id: str = Field(..., description="Identifier of the source chunk")
+    document_id: str = Field(..., description="Identifier of the parent document")
+    source: str = Field(..., description="Source file path or URI")
+    page_number: int | None = Field(default=None, ge=1, description="Page number where available")
+    quote_snippet: str = Field(..., description="Relevant text snippet cited")
+
+
+class QueryRequest(BaseModel):
+    """
+    Public query contract sent to the API Gateway.
+    """
+    query: str = Field(..., description="User question or query to answer")
+    tenant_context: TenantContext = Field(..., description="Security context of user and tenant")
+    top_k: int = Field(default=10, ge=1, description="Number of candidate chunks to retrieve")
+    metadata_filter: dict[str, str | int | float | bool] = Field(
+        default_factory=dict,
+        description="Strictly typed metadata key-value filters for retrieval isolation",
+    )
+
+
+class QueryResponse(BaseModel):
+    """
+    Public response contract returned by the API Gateway after pipeline execution.
+    """
+    answer: str = Field(..., description="Final synthesized answer")
+    confidence_status: ConfidenceStatus = Field(..., description="Categorical confidence status")
+    confidence_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Numerical confidence score (0.0 to 1.0)"
+    )
+    citations: list[Citation] = Field(default_factory=list, description="Grounded citations")
+    verdicts: list[CorrectionVerdict] = Field(
+        default_factory=list, description="Self-correction audit trail"
+    )
+
+
+class GenerationRequest(BaseModel):
+    """
+    Request payload passed to the Generation service.
+    """
+    query: str = Field(..., description="User query to answer")
+    chunks: list[DocumentChunk] = Field(..., description="Verified chunks to ground generation")
+
+
+class GenerationResponse(BaseModel):
+    """
+    Response payload returned by the Generation service.
+    """
+    answer: str = Field(..., description="Final synthesized answer")
+    citations: list[Citation] = Field(default_factory=list, description="Grounded citations")
+    confidence_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Overall generation confidence"
+    )
+
+
+# ==============================================================================
+# COMMON HEALTH CHECK MODEL
+# ==============================================================================
+
+class HealthCheckResponse(BaseModel):
+    """
+    Standardized health check response returned by all services.
+    """
+    status: str = Field(..., description="Status of the service (e.g., 'ok')")
+    service: str = Field(..., description="Name of the service responding")
+    environment: str = Field(..., description="Running environment (e.g., dev, prod)")
+    version: str = Field(default="0.1.0", description="Version of the service build")
