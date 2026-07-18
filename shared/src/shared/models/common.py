@@ -113,3 +113,42 @@ class RetrievalResponse(BaseModel):
         default_factory=list, description="Detailed retrieval results"
     )
     total_found: int = Field(default=0, ge=0, description="Total matching chunks found")
+
+
+# ==============================================================================
+# CORRECTION / SELF-EVALUATOR MODELS
+# ==============================================================================
+
+class CorrectionVerdict(BaseModel):
+    """
+    Evaluation verdict produced by the self-correcting RAG evaluator.
+    """
+    signal_type: SignalType = Field(..., description="Signal evaluated (GROUNDEDNESS/CONTRADICTION)")
+    verdict: bool = Field(..., description="Whether check passed (True) or contradicted (False)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0.0 to 1.0)")
+    reasoning: str = Field(..., description="Explanation of evaluation verdict")
+
+
+class CorrectionRequest(BaseModel):
+    """
+    Request payload passed to Correction service to evaluate relevance or refine query.
+    """
+    query: str = Field(..., description="Original user query being evaluated")
+    retrieved_chunks: list[DocumentChunk] = Field(..., description="Chunks from retrieval step")
+
+
+class CorrectionResult(BaseModel):
+    """
+    Aggregate response payload returned by the self-evaluator/correction service.
+    """
+    is_valid: bool = Field(..., description="Whether context sufficiently answers query")
+    confidence_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Evaluator confidence score (0.0 to 1.0)"
+    )
+    reasoning: str = Field(..., description="Explanation of evaluation decision")
+    verdicts: list[CorrectionVerdict] = Field(
+        default_factory=list, description="Granular evaluation verdicts"
+    )
+    refined_query: str | None = Field(
+        default=None, description="Suggested refined query if invalid"
+    )
