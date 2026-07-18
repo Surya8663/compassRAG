@@ -65,3 +65,15 @@ class Document(BaseModel):
     id: str = Field(..., description="Unique document identifier")
     content: str = Field(..., description="Raw text content of the document")
     metadata: DocumentMetadata = Field(..., description="Strict metadata contract")
+
+
+class DocumentChunk(BaseModel):
+    """
+    Discrete text chunk indexed into Qdrant and Elasticsearch.
+    """
+    id: str = Field(..., description="Unique chunk identifier")
+    document_id: str = Field(..., description="Parent document identifier")
+    content: str = Field(..., description="Text content of the chunk")
+    chunk_index: int = Field(default=0, ge=0, description="Index position within document")
+    metadata: DocumentMetadata = Field(..., description="Strict metadata contract")
+    score: float | None = Field(default=None, description="Optional relevance score")
