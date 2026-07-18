@@ -51,6 +51,18 @@ class Settings(BaseSettings):
         ...,
         description="Elasticsearch cluster URL for BM25 and hybrid search",
     )
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Celery Redis broker connection string",
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/0",
+        description="Celery result backend URL",
+    )
+    TESSERACT_CMD: str = Field(
+        default=r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        description="Path to Tesseract OCR binary",
+    )
 
     # --------------------------------------------------------------------------
     # 3. AI MODELS & EMBEDDINGS CONFIGURATION
@@ -82,6 +94,10 @@ class Settings(BaseSettings):
     CORRECTION_CONFIDENCE_THRESHOLD: float = Field(
         ...,
         description="Minimum confidence score required for self-correction validation",
+    )
+    OCR_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.85,
+        description="Minimum OCR page confidence required before routing to manual review",
     )
     MAX_RETRIES: int = Field(
         ...,
