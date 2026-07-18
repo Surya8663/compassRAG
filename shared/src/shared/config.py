@@ -67,12 +67,28 @@ class Settings(BaseSettings):
     # --------------------------------------------------------------------------
     # 3. AI MODELS & EMBEDDINGS CONFIGURATION
     # --------------------------------------------------------------------------
+    EMBEDDING_PROVIDER: str = Field(
+        default="local",
+        description="Embedding provider selection: 'local' (SentenceTransformer) or 'openai'",
+    )
+    LOCAL_EMBEDDING_MODEL: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Local SentenceTransformer embedding model name",
+    )
+    OPENAI_EMBEDDING_MODEL: str = Field(
+        default="text-embedding-3-small",
+        description="OpenAI embedding model name when provider is 'openai'",
+    )
+    OPENAI_API_KEY: str | None = Field(
+        default=None,
+        description="OpenAI API key used when EMBEDDING_PROVIDER is 'openai'",
+    )
     EMBEDDING_MODEL_NAME: str = Field(
-        ...,
+        default="all-MiniLM-L6-v2",
         description="Embedding model name used for indexing and queries",
     )
     EMBEDDING_DIMENSION: int = Field(
-        ...,
+        default=384,
         description="Dimension size of vector embeddings produced by the model",
     )
     LLM_MODEL_NAME: str = Field(
