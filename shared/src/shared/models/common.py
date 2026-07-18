@@ -77,3 +77,39 @@ class DocumentChunk(BaseModel):
     chunk_index: int = Field(default=0, ge=0, description="Index position within document")
     metadata: DocumentMetadata = Field(..., description="Strict metadata contract")
     score: float | None = Field(default=None, description="Optional relevance score")
+
+
+# ==============================================================================
+# RETRIEVAL MODELS
+# ==============================================================================
+
+class RetrievalResult(BaseModel):
+    """
+    Detailed breakdown of a retrieved chunk along with vector, BM25, and fused scores.
+    """
+    chunk: DocumentChunk = Field(..., description="Retrieved document chunk")
+    vector_score: float = Field(..., description="Vector similarity score from Qdrant")
+    bm25_score: float = Field(..., description="Keyword relevance score from Elasticsearch")
+    fused_score: float = Field(..., description="Reciprocal Rank Fusion or weighted score")
+    rerank_score: float | None = Field(default=None, description="Cross-encoder rerank score")
+
+
+class RetrievalQuery(BaseModel):
+    """
+    Query payload sent to the Retrieval service.
+    """
+    query: str = Field(..., description="User search or refined self-correction query")
+    top_k: int = Field(default=10, ge=1, description="Maximum number of chunks to retrieve")
+    tenant_id: str | None = Field(
+        default=None, description="Optional tenant ID filter for vector isolation"
+    )
+
+
+class RetrievalResponse(BaseModel):
+    """
+    Response payload returned by the Retrieval service.
+    """
+    results: list[RetrievalResult] = Field(
+        default_factory=list, description="Detailed retrieval results"
+    )
+    total_found: int = Field(default=0, ge=0, description="Total matching chunks found")
