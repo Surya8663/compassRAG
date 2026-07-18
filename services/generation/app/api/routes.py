@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-
 from shared.models.common import GenerationRequest, GenerationResponse
 
 router = APIRouter(prefix="/generate", tags=["generation"])
@@ -14,6 +13,6 @@ async def generate_answer(payload: GenerationRequest) -> GenerationResponse:
     """
     return GenerationResponse(
         answer="Scaffolding generation placeholder: answer will be generated from context chunks.",
-        sources=[chunk.id for chunk in payload.chunks],
-        confidence=1.0,
+        citations=[],
+        confidence_score=1.0,
     )
