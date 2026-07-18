@@ -3,17 +3,46 @@ import os
 import subprocess
 import sys
 import time
+
 import httpx
 
 SERVICES = [
-    {"name": "Ingestion Service", "pkg": "compass-rag-ingestion", "dir": "services/ingestion", "port": 8001},
-    {"name": "Retrieval Service", "pkg": "compass-rag-retrieval", "dir": "services/retrieval", "port": 8002},
-    {"name": "Correction Service", "pkg": "compass-rag-correction", "dir": "services/correction", "port": 8003},
-    {"name": "Generation Service", "pkg": "compass-rag-generation", "dir": "services/generation", "port": 8004},
-    {"name": "API Gateway", "pkg": "compass-rag-api-gateway", "dir": "services/api-gateway", "port": 8000},
+    {
+        "name": "Ingestion Service",
+        "pkg": "compass-rag-ingestion",
+        "dir": "services/ingestion",
+        "port": 8001,
+    },
+    {
+        "name": "Retrieval Service",
+        "pkg": "compass-rag-retrieval",
+        "dir": "services/retrieval",
+        "port": 8002,
+    },
+    {
+        "name": "Correction Service",
+        "pkg": "compass-rag-correction",
+        "dir": "services/correction",
+        "port": 8003,
+    },
+    {
+        "name": "Generation Service",
+        "pkg": "compass-rag-generation",
+        "dir": "services/generation",
+        "port": 8004,
+    },
+    {
+        "name": "API Gateway",
+        "pkg": "compass-rag-api-gateway",
+        "dir": "services/api-gateway",
+        "port": 8000,
+    },
 ]
 
-async def wait_for_health(client: httpx.AsyncClient, name: str, port: int, timeout: float = 15.0) -> bool:
+
+async def wait_for_health(
+    client: httpx.AsyncClient, name: str, port: int, timeout: float = 15.0
+) -> bool:
     url = f"http://localhost:{port}/health"
     start = time.time()
     while time.time() - start < timeout:
@@ -27,8 +56,8 @@ async def wait_for_health(client: httpx.AsyncClient, name: str, port: int, timeo
     print(f"[FAIL] {name} (port {port}) failed to return 200 within {timeout}s")
     return False
 
+
 async def main() -> int:
-    # Ensure environment variables are loaded
     env = os.environ.copy()
     env.update({
         "ENVIRONMENT": "testing",
@@ -55,17 +84,40 @@ async def main() -> int:
     print("====================================================================")
     print("STARTING ALL 5 FASTAPI SERVICES LOCALLY FOR VERIFICATION")
     print("====================================================================")
-    
+
     try:
         for s in SERVICES:
-            cmd = ["python", "-m", "uv", "run", "--package", s["pkg"], "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(s["port"])]
+            cmd = [
+                "python",
+                "-m",
+                "uv",
+                "run",
+                "--package",
+                str(s["pkg"]),
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(s["port"]),
+            ]
             print(f"Starting {s['name']} on port {s['port']}...")
-            p = subprocess.Popen(cmd, cwd=s["dir"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            p = subprocess.Popen(
+                cmd,
+                cwd=str(s["dir"]),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             processes.append((s["name"], p))
-        
+
         async with httpx.AsyncClient() as client:
-            results = await asyncio.gather(*(wait_for_health(client, s["name"], s["port"]) for s in SERVICES))
-        
+            tasks = [
+                wait_for_health(client, str(s["name"]), int(s["port"]))
+                for s in SERVICES
+            ]
+            results = await asyncio.gather(*tasks)
+
         success_count = sum(1 for r in results if r)
         total_count = len(SERVICES)
         print("====================================================================")
@@ -73,12 +125,13 @@ async def main() -> int:
         return 0 if success_count == total_count else 1
     finally:
         print("Stopping all local service processes...")
-        for name, p in processes:
+        for _name, p in processes:
             p.terminate()
             try:
                 p.wait(timeout=3)
             except Exception:
                 p.kill()
+
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
