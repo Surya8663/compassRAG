@@ -115,6 +115,32 @@ class Settings(BaseSettings):
         default=0.85,
         description="Minimum OCR page confidence required before routing to manual review",
     )
+    RRF_K_CONSTANT: int = Field(
+        default=60,
+        description="Reciprocal Rank Fusion k constant used for combining rankings",
+    )
+    RERANKER_PROVIDER: str = Field(
+        default="local",
+        description="Reranker provider selection: 'local' (CrossEncoder) or 'cohere'",
+    )
+    LOCAL_RERANK_MODEL: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        description="Local CrossEncoder reranking model name",
+    )
+    COHERE_RERANK_MODEL: str = Field(
+        default="rerank-english-v3.0",
+        description="Cohere reranking model name when provider is 'cohere'",
+    )
+    COHERE_API_KEY: str | None = Field(
+        default=None,
+        description="Cohere API key used when RERANKER_PROVIDER is 'cohere'",
+    )
+    RETRIEVAL_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Minimum average reranked score for verified confidence status",
+    )
     MAX_RETRIES: int = Field(
         ...,
         description="Maximum number of query rewrite / self-correction attempts",
