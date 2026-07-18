@@ -5,28 +5,27 @@ import fitz
 from PIL import Image, ImageDraw, ImageFont
 
 
-def create_native_pdf(output_path: Path | str) -> str:
+def create_native_pdf(output_path: Path | str, text: str | None = None) -> str:
     """
-    Creates a 2-page native text PDF where PyMuPDF can directly extract characters.
+    Creates a native text PDF where PyMuPDF can directly extract characters.
+    If custom `text` is provided, inserts it into a bounding box onto page 1.
     """
     path_str = str(output_path)
     with fitz.open() as doc:
-        # Page 1
         page1 = doc.new_page()
-        page1.insert_text(
-            (50, 100),
+        content = text if text else (
             "Compass RAG Native Text Page 1. This page contains extractable text "
-            "for the document classifier to verify native text layer extraction.",
-            fontsize=12,
+            "for the document classifier to verify native text layer extraction."
         )
-        # Page 2
-        page2 = doc.new_page()
-        page2.insert_text(
-            (50, 100),
-            "Compass RAG Native Text Page 2. Multi-page tracking verifies Batch State Manager "
-            "increments received_pages correctly.",
-            fontsize=12,
-        )
+        page1.insert_textbox(fitz.Rect(50, 50, 550, 750), content, fontsize=12)
+        if not text:
+            page2 = doc.new_page()
+            page2.insert_textbox(
+                fitz.Rect(50, 50, 550, 750),
+                "Compass RAG Native Text Page 2. Multi-page tracking verifies Batch State Manager "
+                "increments received_pages correctly.",
+                fontsize=12,
+            )
         doc.save(path_str)
     return path_str
 
