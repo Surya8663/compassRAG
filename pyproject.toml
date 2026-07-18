@@ -32,6 +32,12 @@ dev = [
     "numpy<2.0.0",
     "en-core-web-sm",
     "langchain-text-splitters>=0.2.0",
+    "qdrant-client>=1.8.0",
+    "elasticsearch>=8.13.0",
+    "sentence-transformers>=2.6.0",
+    "openai>=1.14.0",
+    "psycopg2-binary>=2.9.9",
+    "asyncpg>=0.29.0",
 ]
 
 [tool.uv.sources]
