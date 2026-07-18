@@ -6,8 +6,10 @@ from shared.config import get_settings
 
 from app.db.models import DocumentBatch, DocumentPage, ManualReviewQueue
 from app.db.session import get_sync_session
+from app.pipeline.chunker import get_chunker_service
 from app.pipeline.classifier import classify_and_extract_page
 from app.pipeline.ocr import process_page_ocr
+from app.pipeline.pii_redaction import get_pii_service
 from app.workers.celery_app import celery_app
 
 
@@ -50,11 +52,17 @@ def process_document_page(
                 page_obj = doc.load_page(page_number - 1)
                 classification, extracted_text = classify_and_extract_page(page_obj)
 
+                chunks_data: list[dict[str, Any]] = []
+
                 if classification == "SCANNED_IMAGE":
                     extracted_text, ocr_confidence = process_page_ocr(page_obj)
+                    # Enforce PII Redaction BEFORE storing or proceeding
+                    pii_service = get_pii_service()
+                    redacted_text = pii_service.redact_text(extracted_text)
+
                     page.classification = classification
                     page.ocr_confidence = ocr_confidence
-                    page.extracted_text = extracted_text
+                    page.extracted_text = redacted_text  # NEVER store unredacted text
                     page.processed_at = _utc_now()
 
                     if ocr_confidence < settings.OCR_CONFIDENCE_THRESHOLD:
@@ -74,16 +82,36 @@ def process_document_page(
                     else:
                         page.status = "EXTRACTED"
                 else:
+                    # NATIVE_TEXT extraction
+                    pii_service = get_pii_service()
+                    redacted_text = pii_service.redact_text(extracted_text)
+
                     page.classification = classification
                     page.ocr_confidence = 1.0
-                    page.extracted_text = extracted_text
+                    page.extracted_text = redacted_text  # NEVER store unredacted text
                     page.status = "EXTRACTED"
                     page.processed_at = _utc_now()
+
+                # Run Semantic Chunking & Tagging once quality check passes
+                if page.status == "EXTRACTED" and page.extracted_text:
+                    chunker = get_chunker_service()
+                    chunks = chunker.chunk_and_tag_page(
+                        redacted_text=page.extracted_text,
+                        document_id=document_id,
+                        source=batch.filename,
+                        page_number=page_number,
+                        ingestion_timestamp=batch.created_at,
+                        tenant_id="tenant_default",
+                        version_id="v1",
+                        ocr_confidence=page.ocr_confidence,
+                    )
+                    chunks_data = [chunk.model_dump(mode="json") for chunk in chunks]
 
         except Exception as exc:
             page.status = "FAILED"
             page.error_message = str(exc)
             page.processed_at = _utc_now()
+            chunks_data = []
 
         # Flush pending ORM changes before querying aggregate page counts
         session.flush()
@@ -116,6 +144,8 @@ def process_document_page(
             "page_number": page_number,
             "classification": page.classification,
             "ocr_confidence": page.ocr_confidence,
+            "chunks_indexed": len(chunks_data),
+            "chunks": chunks_data,
         }
 
     except Exception as e:
