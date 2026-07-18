@@ -22,3 +22,18 @@ class ConfidenceStatus(StrEnum):
     VERIFIED = "VERIFIED"
     CLARIFICATION_NEEDED = "CLARIFICATION_NEEDED"
     LOW_CONFIDENCE = "LOW_CONFIDENCE"
+
+
+# ==============================================================================
+# TENANT & SECURITY CONTEXT
+# ==============================================================================
+
+class TenantContext(BaseModel):
+    """
+    Multi-tenant security context passed along with requests across services.
+    Enforces tenant isolation and role-based access control.
+    """
+    tenant_id: str = Field(..., description="Unique identifier for the tenant")
+    user_id: str = Field(..., description="Unique identifier for the user")
+    roles: list[str] = Field(default_factory=list, description="Assigned user roles")
+    permissions: list[str] = Field(default_factory=list, description="Granted permissions")
