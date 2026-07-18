@@ -16,6 +16,7 @@ dependencies = [
     "elasticsearch>=8.13.0",
     "sentence-transformers>=2.6.0",
     "openai>=1.14.0",
+    "cohere>=5.0.0",
     "compass-rag-shared",
 ]
 
