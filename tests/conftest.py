@@ -44,6 +44,11 @@ TEST_ENV_VARS = {
     "JWT_SECRET_KEY": "compass-rag-dev-secret-key-32bytes-long!!",
     "JWT_ALGORITHM": "HS256",
     "KEYCLOAK_JWKS_URL": "http://localhost:8080/realms/compass-rag/protocol/openid-connect/certs",
+    # Observability — disable OTel exporting in tests; Prometheus metrics still work
+    "OTEL_ENABLED": "False",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+    "OTEL_SERVICE_NAME": "compass-rag-test",
+    "PROMETHEUS_ENABLED": "True",
 }
 for k, v in TEST_ENV_VARS.items():
     os.environ[k] = v
