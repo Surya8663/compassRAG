@@ -63,6 +63,21 @@ services:
       timeout: 5s
       retries: 10
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: compass_keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # ============================================================================
   # 2. FASTAPI MICROSERVICES
   # ============================================================================
@@ -170,6 +185,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/compass-rag/protocol/openid-connect/certs
     ports:
       - "8000:8000"
     depends_on:
@@ -180,6 +196,8 @@ services:
       correction:
         condition: service_started
       generation:
+        condition: service_started
+      keycloak:
         condition: service_started
 
 volumes:
