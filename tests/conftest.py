@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT_DIR / "services" / "correction"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "retrieval"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "ingestion"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "generation"))
+sys.path.insert(0, str(ROOT_DIR / "services" / "api-gateway"))
 
 import pytest  # noqa: E402
 from shared.config import get_settings  # noqa: E402
@@ -39,6 +40,10 @@ TEST_ENV_VARS = {
     "CELERY_BROKER_URL": "redis://localhost:6379/0",
     "CELERY_RESULT_BACKEND": "redis://localhost:6379/0",
     "TESSERACT_CMD": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    "AUTH_ENABLED": "True",
+    "JWT_SECRET_KEY": "compass-rag-dev-secret-key-32bytes-long!!",
+    "JWT_ALGORITHM": "HS256",
+    "KEYCLOAK_JWKS_URL": "http://localhost:8080/realms/compass-rag/protocol/openid-connect/certs",
 }
 for k, v in TEST_ENV_VARS.items():
     os.environ[k] = v
