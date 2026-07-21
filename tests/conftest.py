@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT_DIR / "shared" / "src"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "correction"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "retrieval"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "ingestion"))
+sys.path.insert(0, str(ROOT_DIR / "services" / "generation"))
 
 import pytest  # noqa: E402
 from shared.config import get_settings  # noqa: E402
