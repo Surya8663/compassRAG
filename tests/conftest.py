@@ -3,13 +3,16 @@ import sys
 from collections.abc import Generator
 from pathlib import Path
 
-import pytest
-from shared.config import get_settings
-
-# Ensure monorepo root and service packages are on sys.path during tests
+# Ensure monorepo root, shared/src, and services are on sys.path before imports
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(ROOT_DIR / "shared" / "src"))
+sys.path.insert(0, str(ROOT_DIR / "services" / "correction"))
+sys.path.insert(0, str(ROOT_DIR / "services" / "retrieval"))
 sys.path.insert(0, str(ROOT_DIR / "services" / "ingestion"))
+
+import pytest  # noqa: E402
+from shared.config import get_settings  # noqa: E402
 
 # Set default required environment variables at import time before modules are collected
 TEST_ENV_VARS = {
