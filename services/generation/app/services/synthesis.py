@@ -6,12 +6,16 @@ atomic claim attribution and mapping source citations directly to specific chunk
 
 import json
 import logging
+import time
 from typing import Any
 
 from shared.config import Settings, get_settings
+from shared.metrics import PIPELINE_STAGE_DURATION
 from shared.models.common import Citation, DocumentChunk
+from shared.telemetry import get_tracer, traced_span
 
 logger = logging.getLogger(__name__)
+_tracer = get_tracer(__name__)
 
 
 class FlagshipSynthesizerService:
@@ -36,10 +40,34 @@ class FlagshipSynthesizerService:
     def synthesize(self, query: str, chunks: list[DocumentChunk]) -> tuple[str, list[Citation]]:
         """
         Synthesizes an answer for `query` grounded on `chunks`.
+        Wrapped in a ``compass.generation.synthesize`` OTel span with key attributes.
+
         Returns:
             - answer (str): Synthesized answer text.
-            - citations (list[Citation]): Grounded citations mapped to `chunk_id`.
+            - citations (list[Citation]): Grounded citations mapped to ``chunk_id``.
         """
+        with traced_span(
+            _tracer,
+            "compass.generation.synthesize",
+            {
+                "model_name": self.model_name,
+                "chunk_count": len(chunks),
+                "query.length": len(query),
+            },
+        ) as span:
+            t0 = time.perf_counter()
+            answer, citations = self._synthesize_impl(query, chunks)
+            span.set_attribute("answer_length", len(answer))
+            span.set_attribute("citation_count", len(citations))
+            PIPELINE_STAGE_DURATION.labels(
+                service="compass-rag-generation", stage="synthesize"
+            ).observe(time.perf_counter() - t0)
+        return answer, citations
+
+    def _synthesize_impl(
+        self, query: str, chunks: list[DocumentChunk]
+    ) -> tuple[str, list[Citation]]:
+        """Internal implementation — called from the traced synthesize() wrapper."""
         if not chunks:
             return "No verified context available to answer the query.", []
 

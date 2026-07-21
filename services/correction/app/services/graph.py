@@ -7,11 +7,14 @@ Routes dynamically based on computed confidence, contradiction verdicts, and ret
 """
 
 import logging
+import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 from shared.config import get_settings
+from shared.metrics import CORRECTION_LOOP_RETRIES, PIPELINE_STAGE_DURATION
 from shared.models.common import Citation, ConfidenceStatus
+from shared.telemetry import get_tracer, traced_span
 
 from services.retrieval.app.services.evaluator import get_retrieval_evaluator
 from services.retrieval.app.services.hybrid_retriever import get_hybrid_retriever
@@ -23,6 +26,7 @@ from .reformulator import get_query_reformulator
 from .state import CorrectionGraphState
 
 logger = logging.getLogger(__name__)
+_tracer = get_tracer(__name__)
 
 
 # ==============================================================================
@@ -88,9 +92,18 @@ def evaluate_confidence_node(state: CorrectionGraphState) -> dict[str, Any]:
     evaluator = get_retrieval_evaluator()
     chunks = state.get("retrieved_chunks", [])
 
-    avg_score, is_conf, status, _ = evaluator.evaluate_confidence(
-        results=chunks, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
-    )
+    with traced_span(
+        _tracer,
+        "compass.correction.evaluate_confidence",
+        {"chunk_count": len(chunks)},
+    ):
+        t0 = time.perf_counter()
+        avg_score, is_conf, status, _ = evaluator.evaluate_confidence(
+            results=chunks, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
+        )
+        PIPELINE_STAGE_DURATION.labels(
+            service="compass-rag-correction", stage="evaluate_confidence"
+        ).observe(time.perf_counter() - t0)
     return {
         "retrieval_confidence": avg_score,
         "retrieval_status": status,
@@ -102,7 +115,18 @@ def contradiction_check_node(state: CorrectionGraphState) -> dict[str, Any]:
     detector = get_contradiction_detector()
     chunks = state.get("retrieved_chunks", [])
 
-    detected, same_date, resolved, reasoning = detector.check_contradictions(chunks)
+    with traced_span(
+        _tracer,
+        "compass.correction.contradiction_check",
+        {"chunk_count": len(chunks)},
+    ) as span:
+        t0 = time.perf_counter()
+        detected, same_date, resolved, reasoning = detector.check_contradictions(chunks)
+        span.set_attribute("contradictions_detected", detected)
+        span.set_attribute("same_date_contradiction", same_date)
+        PIPELINE_STAGE_DURATION.labels(
+            service="compass-rag-correction", stage="contradiction_check"
+        ).observe(time.perf_counter() - t0)
     return {
         "contradictions_detected": detected,
         "has_same_date_contradiction": same_date,
@@ -149,7 +173,18 @@ def groundedness_check_node(state: CorrectionGraphState) -> dict[str, Any]:
     chunks = state.get("retrieved_chunks", [])
     existing_verdicts = state.get("verdicts", [])
 
-    score, is_grounded, verdicts, summary = checker.verify_groundedness(draft, chunks)
+    with traced_span(
+        _tracer,
+        "compass.correction.groundedness_check",
+        {"draft_length": len(draft), "chunk_count": len(chunks)},
+    ) as span:
+        t0 = time.perf_counter()
+        score, is_grounded, verdicts, summary = checker.verify_groundedness(draft, chunks)
+        span.set_attribute("groundedness_score", score)
+        span.set_attribute("is_grounded", is_grounded)
+        PIPELINE_STAGE_DURATION.labels(
+            service="compass-rag-correction", stage="groundedness_check"
+        ).observe(time.perf_counter() - t0)
     return {
         "groundedness_score": score,
         "groundedness_verdict": is_grounded,
@@ -162,6 +197,7 @@ def reformulate_query_node(state: CorrectionGraphState) -> dict[str, Any]:
     reformulator = get_query_reformulator()
     query = state.get("query", "")
     attempts = state.get("attempt_count", 0)
+    tenant_id = state.get("tenant_id", "unknown")
 
     # Determine why we are reformulating
     if state.get("retrieval_status") == ConfidenceStatus.LOW_CONFIDENCE:
@@ -169,7 +205,22 @@ def reformulate_query_node(state: CorrectionGraphState) -> dict[str, Any]:
     else:
         reason = f"Low groundedness score ({state.get('groundedness_score', 0.0):.2f})"
 
-    new_query, strategy, _ = reformulator.reformulate(query, attempts, reason)
+    with traced_span(
+        _tracer,
+        "compass.correction.reformulate_query",
+        {"attempt": attempts, "reason": reason, "tenant_id": tenant_id},
+    ) as span:
+        t0 = time.perf_counter()
+        new_query, strategy, _ = reformulator.reformulate(query, attempts, reason)
+        span.set_attribute("strategy", str(strategy))
+        span.set_attribute("new_query_length", len(new_query))
+        # Increment Prometheus retry counter
+        CORRECTION_LOOP_RETRIES.labels(
+            service="compass-rag-correction", tenant_id=tenant_id
+        ).inc()
+        PIPELINE_STAGE_DURATION.labels(
+            service="compass-rag-correction", stage="reformulate_query"
+        ).observe(time.perf_counter() - t0)
     return {
         "query": new_query,
         "attempt_count": attempts + 1,
