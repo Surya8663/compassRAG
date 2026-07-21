@@ -13,7 +13,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 from shared.config import get_settings
 from shared.metrics import CORRECTION_LOOP_RETRIES, PIPELINE_STAGE_DURATION
-from shared.models.common import Citation, ConfidenceStatus
+from shared.models.common import Citation, ConfidenceStatus, DocumentChunk
 from shared.telemetry import get_tracer, traced_span
 from shared.tenant import resolve_tenant_id
 
@@ -139,7 +139,7 @@ def contradiction_check_node(state: CorrectionGraphState) -> dict[str, Any]:
 
 
 def generate_draft_node(state: CorrectionGraphState) -> dict[str, Any]:
-    """Node 4: Generates draft answer from verified and resolved candidate chunks."""
+    """Node 4: Generates draft answer from verified and resolved candidate chunks using FlagshipSynthesizerService."""
     chunks = state.get("retrieved_chunks", [])
     query = state.get("query", "")
 
@@ -149,36 +149,55 @@ def generate_draft_node(state: CorrectionGraphState) -> dict[str, Any]:
             "draft_citations": [],
         }
 
-    # Draft synthesis based on top candidate content
-    top_c = chunks[0].chunk if hasattr(chunks[0], "chunk") else chunks[0]
-    if isinstance(top_c, dict):
-        cid = str(top_c.get("id") or top_c.get("chunk_id") or "chk_0")
-        did = str(top_c.get("document_id", "doc_0"))
-        meta = top_c.get("metadata") or {}
-        src = str(meta.get("source") if isinstance(meta, dict) else (top_c.get("source") or "unknown"))
-        pnum = int(meta.get("page_number") if isinstance(meta, dict) and meta.get("page_number") is not None else (top_c.get("page_number") or 1))
-        content_str = str(top_c.get("content", ""))
-    else:
-        cid = getattr(top_c, "id", "chk_0")
-        did = getattr(top_c, "document_id", "doc_0")
-        meta = getattr(top_c, "metadata", None)
-        src = getattr(meta, "source", "unknown") if meta else getattr(top_c, "source", "unknown")
-        pnum = getattr(meta, "page_number", 1) if meta else getattr(top_c, "page_number", 1)
-        content_str = getattr(top_c, "content", "")
+    # Convert retrieved chunks to clean DocumentChunk objects for synthesis
+    doc_chunks: list[DocumentChunk] = []
+    for item in chunks:
+        if hasattr(item, "chunk") and isinstance(getattr(item, "chunk"), DocumentChunk):
+            doc_chunks.append(item.chunk)
+        elif isinstance(item, DocumentChunk):
+            doc_chunks.append(item)
+        elif isinstance(item, dict):
+            c_dict = item.get("chunk", item) if isinstance(item.get("chunk"), dict) else item
+            try:
+                if isinstance(c_dict, DocumentChunk):
+                    doc_chunks.append(c_dict)
+                else:
+                    doc_chunks.append(DocumentChunk.model_validate(c_dict))
+            except Exception as exc:
+                logger.debug("Could not validate DocumentChunk from dict: %s", exc)
+        else:
+            c = getattr(item, "chunk", item)
+            if isinstance(c, DocumentChunk):
+                doc_chunks.append(c)
 
-    citations = [
-        Citation(
-            chunk_id=cid,
-            document_id=did,
-            source=src,
-            page_number=pnum,
-            quote_snippet=content_str[:100],
-        )
-    ]
+    if not doc_chunks and chunks:
+        # Fallback if no clean DocumentChunk objects could be extracted
+        top_c = chunks[0].chunk if hasattr(chunks[0], "chunk") else chunks[0]
+        content_str = getattr(top_c, "content", "") if not isinstance(top_c, dict) else str(top_c.get("content", ""))
+        cid = getattr(top_c, "id", "chk_0") if not isinstance(top_c, dict) else str(top_c.get("id", "chk_0"))
+        did = getattr(top_c, "document_id", "doc_0") if not isinstance(top_c, dict) else str(top_c.get("document_id", "doc_0"))
+        meta = getattr(top_c, "metadata", None) if not isinstance(top_c, dict) else top_c.get("metadata")
+        src = getattr(meta, "source", "unknown") if meta and not isinstance(meta, dict) else (meta.get("source", "unknown") if isinstance(meta, dict) else "unknown")
+        pnum = getattr(meta, "page_number", 1) if meta and not isinstance(meta, dict) else (meta.get("page_number", 1) if isinstance(meta, dict) else 1)
+        return {
+            "draft_answer": content_str,
+            "draft_citations": [
+                Citation(
+                    chunk_id=cid,
+                    document_id=did,
+                    source=src,
+                    page_number=pnum,
+                    quote_snippet=content_str[:100],
+                )
+            ],
+        }
 
-    logger.debug("Generating draft answer for query: '%s'", query)
+    from services.generation.app.services.synthesis import FlagshipSynthesizerService
+    synthesizer = FlagshipSynthesizerService()
+    logger.debug("Generating draft answer using FlagshipSynthesizerService for query: '%s'", query)
+    answer, citations = synthesizer.synthesize(query, doc_chunks)
     return {
-        "draft_answer": content_str,
+        "draft_answer": answer,
         "draft_citations": citations,
     }
 

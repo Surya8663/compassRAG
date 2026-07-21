@@ -202,6 +202,9 @@ class QueryResponse(BaseModel):
     verdicts: list[CorrectionVerdict] = Field(
         default_factory=list, description="Self-correction audit trail"
     )
+    latency_ms: float | None = Field(
+        default=None, description="End-to-end processing duration in milliseconds"
+    )
 
 
 class GenerationRequest(BaseModel):

@@ -5,6 +5,7 @@ and invokes the real LangGraph Correction Router engine (`CorrectionRouterGraph`
 """
 
 import logging
+import time
 from typing import Any
 import uuid
 from datetime import UTC, datetime
@@ -214,7 +215,9 @@ class GatewayOrchestratorService:
             "final_status": ConfidenceStatus.VERIFIED,
         }
 
+        t0 = time.perf_counter()
         final_state = await graph.ainvoke(initial_state)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         return QueryResponse(
             answer=final_state.get("final_answer", "No answer generated."),
@@ -226,6 +229,7 @@ class GatewayOrchestratorService:
             ),
             citations=final_state.get("draft_citations", []),
             verdicts=final_state.get("verdicts", []),
+            latency_ms=elapsed_ms,
         )
 
     def get_job_status(self, job_id: str, tenant_context: TenantContext) -> JobStatusResponse:

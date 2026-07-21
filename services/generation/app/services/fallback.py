@@ -61,7 +61,9 @@ class FallbackSynthesizerService:
 
                 system_prompt = (
                     "You are a fallback RAG generation assistant. Answer the query using "
-                    "the reference chunks provided. Output structured JSON matching:\n"
+                    "the reference chunks provided. Note: Reference chunks may contain PII redaction placeholders "
+                    "like <PERSON>, <EMAIL_ADDRESS>, etc. Treat them naturally or work around them without exposing "
+                    "raw redaction tags where avoidable. Output structured JSON matching:\n"
                     "{\n"
                     '  "answer": "Synthesized fallback answer...",\n'
                     '  "claims": [\n'

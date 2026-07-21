@@ -86,7 +86,10 @@ class FlagshipSynthesizerService:
                 system_prompt = (
                     "You are an authoritative RAG generation assistant. "
                     "You must answer the user's query strictly and solely using the provided "
-                    "reference chunks. Do not use external knowledge.\n\n"
+                    "reference chunks. Do not use external knowledge.\n"
+                    "Note: Reference chunks may contain PII redaction placeholders like <PERSON>, <EMAIL_ADDRESS>, "
+                    "<PHONE_NUMBER>, etc. When formulating your answer, either work around these placeholders naturally "
+                    "or treat them as generic entities without exposing raw redaction tags where avoidable.\n\n"
                     "You must output structured JSON matching this exact format:\n"
                     "{\n"
                     '  "answer": "The comprehensive synthesized answer...",\n'
