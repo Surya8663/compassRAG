@@ -15,6 +15,7 @@ from shared.config import get_settings
 from shared.metrics import CORRECTION_LOOP_RETRIES, PIPELINE_STAGE_DURATION
 from shared.models.common import Citation, ConfidenceStatus
 from shared.telemetry import get_tracer, traced_span
+from shared.tenant import resolve_tenant_id
 
 from services.retrieval.app.services.evaluator import get_retrieval_evaluator
 from services.retrieval.app.services.hybrid_retriever import get_hybrid_retriever
@@ -56,7 +57,7 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
 
     retriever = get_hybrid_retriever()
     query = state.get("query", "")
-    tenant_id = state.get("tenant_id", "default_tenant")
+    tenant_id = resolve_tenant_id(explicit_tenant_id=state.get("tenant_id"))
 
     try:
         results, avg_score, status, _ = await retriever.retrieve(

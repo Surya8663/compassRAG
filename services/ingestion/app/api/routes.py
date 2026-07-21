@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.db.models import DocumentBatch, DocumentPage
 from app.db.session import get_sync_session
 from app.workers.tasks import process_document_page
+from shared.tenant import resolve_tenant_id
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
@@ -138,7 +139,7 @@ async def upload_document_batch(
     finally:
         session.close()
 
-    target_tenant = tenant_id or "tenant_enterprise"
+    target_tenant = resolve_tenant_id(explicit_tenant_id=tenant_id)
 
     # Execute processing right inside the route when running locally without a separate Celery worker process
     import asyncio

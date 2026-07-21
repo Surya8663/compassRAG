@@ -13,6 +13,7 @@ from shared.models.common import (
     CorrectionResult,
     RetrievalResult,
 )
+from shared.tenant import resolve_tenant_id
 
 from app.services.graph import get_correction_graph
 from app.services.state import CorrectionGraphState
@@ -44,7 +45,7 @@ async def evaluate_and_correct(payload: CorrectionRequest) -> CorrectionResult:
 
     initial_state: CorrectionGraphState = {
         "query": payload.query,
-        "tenant_id": getattr(payload, "tenant_id", "default_tenant"),
+        "tenant_id": resolve_tenant_id(explicit_tenant_id=getattr(payload, "tenant_id", None)),
         "original_query": payload.query,
         "attempt_count": 0,
         "retrieved_chunks": wrapped_chunks,

@@ -11,6 +11,7 @@ from jose import jwt
 from jose.exceptions import JWTError
 from shared.config import get_settings
 from shared.models.common import TenantContext
+from shared.tenant import resolve_tenant_id
 
 
 class JWTValidator:
@@ -35,14 +36,16 @@ class JWTValidator:
                 ) from e
         return self._jwks_keys
 
-    def validate_and_extract(self, auth_header: str | None, target_tenant: str = "tenant_enterprise") -> TenantContext:
+    def validate_and_extract(self, auth_header: str | None, target_tenant: str | None = None) -> TenantContext:
         """
         Decodes token, verifies signature and expiration, and extracts claims.
         Rejects invalid requests with 401 Unauthorized before downstream calls.
         """
         if not self.settings.AUTH_ENABLED:
             return TenantContext(
-                tenant_id=target_tenant,
+                tenant_id=resolve_tenant_id(
+                    explicit_tenant_id=target_tenant,
+                ),
                 user_id="dev_admin",
                 roles=["admin"],
                 permissions=["*"],
@@ -72,12 +75,10 @@ class JWTValidator:
         except JWTError as e:
             raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}") from e
 
-        # Extract tenant_id from claims
-        tenant_id = (
-            payload.get("tenant_id")
-            or payload.get("org")
-            or payload.get("organization")
-            or "default_tenant"
+        # Extract tenant_id via canonical resolver
+        tenant_id = resolve_tenant_id(
+            explicit_tenant_id=target_tenant,
+            jwt_claims=payload,
         )
         user_id = str(payload.get("sub") or payload.get("user_id") or "anonymous")
 
@@ -108,5 +109,5 @@ def get_current_tenant_context(request: Request) -> TenantContext:
     FastAPI dependency that extracts and validates the JWT from incoming HTTP requests.
     """
     auth_header = request.headers.get("Authorization")
-    x_tenant_id = request.headers.get("X-Tenant-ID", "tenant_enterprise")
+    x_tenant_id = request.headers.get("X-Tenant-ID")
     return _jwt_validator.validate_and_extract(auth_header, target_tenant=x_tenant_id)

@@ -3,6 +3,7 @@ from typing import Any
 
 import fitz
 from shared.config import get_settings
+from shared.tenant import resolve_tenant_id
 
 from app.db.models import DocumentBatch, DocumentPage, ManualReviewQueue
 from app.db.session import get_sync_session
@@ -19,7 +20,7 @@ def _utc_now() -> datetime:
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=5)  # type: ignore[untyped-decorator]
 def process_document_page(
-    self: Any, batch_id: str, page_number: int, file_path: str, document_id: str, tenant_id: str = "tenant_enterprise"
+    self: Any, batch_id: str, page_number: int, file_path: str, document_id: str, tenant_id: str | None = None
 ) -> dict[str, Any]:
     """
     Celery task to process a single PDF page asynchronously:
@@ -29,6 +30,7 @@ def process_document_page(
     4. Updates DocumentPage and increments DocumentBatch.received_pages in Postgres.
     """
     settings = get_settings()
+    tenant_id = resolve_tenant_id(explicit_tenant_id=tenant_id)
     session = get_sync_session()
 
     try:
