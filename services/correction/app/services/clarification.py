@@ -24,12 +24,8 @@ class ClarificationAndFallbackService:
         self.provider = self.settings.EMBEDDING_PROVIDER
         self._openai_client: Any = None
 
-        if self.provider == "openai" and self.settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
-            except Exception as exc:
-                logger.warning("Failed to initialize OpenAI client for Clarification: %s", exc)
+        from shared.utils.llm_client import get_llm_client
+        self._openai_client = get_llm_client(self.settings, timeout=5.0)
 
     def generate_clarification(
         self, query: str, contradictory_chunks: list[RetrievalResult]
@@ -39,10 +35,19 @@ class ClarificationAndFallbackService:
         """
         conflict_summary = []
         for i, res in enumerate(contradictory_chunks[:3], 1):
-            meta = res.chunk.metadata
-            snippet = res.chunk.content.strip()[:150]
+            c = res.chunk if hasattr(res, "chunk") else res
+            if isinstance(c, dict):
+                cid = str(c.get("id") or c.get("chunk_id") or f"chk_{i}")
+                meta = c.get("metadata") or {}
+                ver = str(meta.get("version_id", "v1.0") if isinstance(meta, dict) else "v1.0")
+                snippet = str(c.get("content", "")).strip()[:150]
+            else:
+                cid = getattr(c, "id", f"chk_{i}")
+                meta = getattr(c, "metadata", None)
+                ver = getattr(meta, "version_id", "v1.0") if meta else "v1.0"
+                snippet = getattr(c, "content", "").strip()[:150]
             conflict_summary.append(
-                f"Source {i} (`{res.chunk.id}`, ver `{meta.version_id}`): \"{snippet}...\""
+                f"Source {i} (`{cid}`, ver `{ver}`): \"{snippet}...\""
             )
         conflicts_text = "\n".join(conflict_summary)
 
@@ -59,7 +64,7 @@ class ClarificationAndFallbackService:
                     "Respond with only the clarifying question to present to the user."
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )
@@ -70,7 +75,11 @@ class ClarificationAndFallbackService:
                 logger.warning("OpenAI clarification generation error: %s. Using fallback.", exc)
 
         # Offline / local clarification generation
-        sources_str = ", ".join([f"`{c.chunk.id}`" for c in contradictory_chunks[:2]])
+        def get_cid(res: Any, idx: int) -> str:
+            c = res.chunk if hasattr(res, "chunk") else res
+            return str(c.get("id") or c.get("chunk_id") or f"chk_{idx}") if isinstance(c, dict) else getattr(c, "id", f"chk_{idx}")
+
+        sources_str = ", ".join([f"`{get_cid(c, idx)}`" for idx, c in enumerate(contradictory_chunks[:2], 1)])
         return (
             f"We found conflicting statements regarding '{query}' across documents with identical "
             f"version metadata ({sources_str}). For example, one source states different "
@@ -99,7 +108,7 @@ class ClarificationAndFallbackService:
                     "Respond with only the low-confidence response to present to the user."
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )

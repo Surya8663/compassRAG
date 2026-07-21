@@ -1,0 +1,288 @@
+services:
+  # ============================================================================
+  # 1. CORE DATA STORES & ENGINES
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: compass_postgres
+    environment:
+      POSTGRES_DB: compass_rag
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d compass_rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: compass_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: compass_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: compass_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: compass_keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================================
+  # 2. OBSERVABILITY STACK
+  # ============================================================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: compass_jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:16686 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 3. FASTAPI MICROSERVICES
+  # ============================================================================
+  ingestion:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    container_name: compass_ingestion
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-ingestion
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  retrieval:
+    build:
+      context: .
+      dockerfile: services/retrieval/Dockerfile
+    container_name: compass_retrieval
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-retrieval
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  correction:
+    build:
+      context: .
+      dockerfile: services/correction/Dockerfile
+    container_name: compass_correction
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-correction
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  generation:
+    build:
+      context: .
+      dockerfile: services/generation/Dockerfile
+    container_name: compass_generation
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-generation
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  evaluation:
+    build:
+      context: .
+      dockerfile: services/evaluation/Dockerfile
+    container_name: compass_evaluation
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-evaluation
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: compass_api_gateway
+    env_file:
+      - .env
+    environment:
+      - INGESTION_SERVICE_URL=http://ingestion:8001
+      - RETRIEVAL_SERVICE_URL=http://retrieval:8002
+      - CORRECTION_SERVICE_URL=http://correction:8003
+      - GENERATION_SERVICE_URL=http://generation:8004
+      - EVALUATION_SERVICE_URL=http://evaluation:8005
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/compass-rag/protocol/openid-connect/certs
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      ingestion:
+        condition: service_started
+      retrieval:
+        condition: service_started
+      correction:
+        condition: service_started
+      generation:
+        condition: service_started
+      evaluation:
+        condition: service_started
+      keycloak:
+        condition: service_started
+      jaeger:
+        condition: service_started
+
+  # ============================================================================
+  # 4. NEXT.JS 14 ENTERPRISE FRONTEND
+  # ============================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: compass_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  es_data:

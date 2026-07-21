@@ -35,14 +35,14 @@ class JWTValidator:
                 ) from e
         return self._jwks_keys
 
-    def validate_and_extract(self, auth_header: str | None) -> TenantContext:
+    def validate_and_extract(self, auth_header: str | None, target_tenant: str = "tenant_enterprise") -> TenantContext:
         """
         Decodes token, verifies signature and expiration, and extracts claims.
         Rejects invalid requests with 401 Unauthorized before downstream calls.
         """
         if not self.settings.AUTH_ENABLED:
             return TenantContext(
-                tenant_id="dev_tenant",
+                tenant_id=target_tenant,
                 user_id="dev_admin",
                 roles=["admin"],
                 permissions=["*"],
@@ -61,19 +61,16 @@ class JWTValidator:
                     token,
                     jwks,
                     algorithms=[self.settings.JWT_ALGORITHM],
-                    options={"verify_aud": False},
+                    audience=self.settings.KEYCLOAK_CLIENT_ID,
                 )
             else:
                 payload = jwt.decode(
                     token,
                     self.settings.JWT_SECRET_KEY,
                     algorithms=[self.settings.JWT_ALGORITHM],
-                    options={"verify_aud": False},
                 )
         except JWTError as e:
-            raise HTTPException(
-                status_code=401, detail=f"Invalid or expired JWT token: {str(e)}"
-            ) from e
+            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}") from e
 
         # Extract tenant_id from claims
         tenant_id = (
@@ -111,4 +108,5 @@ def get_current_tenant_context(request: Request) -> TenantContext:
     FastAPI dependency that extracts and validates the JWT from incoming HTTP requests.
     """
     auth_header = request.headers.get("Authorization")
-    return _jwt_validator.validate_and_extract(auth_header)
+    x_tenant_id = request.headers.get("X-Tenant-ID", "tenant_enterprise")
+    return _jwt_validator.validate_and_extract(auth_header, target_tenant=x_tenant_id)

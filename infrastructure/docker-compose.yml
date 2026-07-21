@@ -97,7 +97,7 @@ services:
       retries: 5
 
   # ============================================================================
-  # 2. FASTAPI MICROSERVICES
+  # 3. FASTAPI MICROSERVICES
   # ============================================================================
   ingestion:
     build:
@@ -203,6 +203,30 @@ services:
       jaeger:
         condition: service_started
 
+  evaluation:
+    build:
+      context: ..
+      dockerfile: services/evaluation/Dockerfile
+    container_name: compass_evaluation
+    env_file:
+      - ../.env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-evaluation
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+
   api-gateway:
     build:
       context: ..
@@ -215,6 +239,7 @@ services:
       - RETRIEVAL_SERVICE_URL=http://retrieval:8002
       - CORRECTION_SERVICE_URL=http://correction:8003
       - GENERATION_SERVICE_URL=http://generation:8004
+      - EVALUATION_SERVICE_URL=http://evaluation:8005
       - POSTGRES_DSN=postgresql+asyncpg://postgres:postgres@postgres:5432/compass_rag
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
@@ -233,9 +258,27 @@ services:
         condition: service_started
       generation:
         condition: service_started
+      evaluation:
+        condition: service_started
       keycloak:
         condition: service_started
       jaeger:
+        condition: service_started
+
+  # ============================================================================
+  # 4. NEXT.JS 14 ENTERPRISE FRONTEND
+  # ============================================================================
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: compass_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
         condition: service_started
 
 volumes:

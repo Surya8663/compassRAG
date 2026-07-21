@@ -8,6 +8,10 @@ from functools import lru_cache
 from typing import Any
 
 from elasticsearch import Elasticsearch
+import elasticsearch._sync.client._base as _es_base
+_es_base._COMPAT_MIMETYPE_TEMPLATE = "application/vnd.elasticsearch+%s; compatible-with=8"
+_es_base._COMPAT_MIMETYPE_SUB = _es_base._COMPAT_MIMETYPE_TEMPLATE % (r"\g<1>",)
+
 from shared.config import get_settings
 from shared.models.common import DocumentChunk
 
@@ -60,6 +64,7 @@ class ElasticsearchStoreService:
         Indexes a DocumentChunk into Elasticsearch for keyword search.
         If refresh is True, refreshes the index so the document is searchable without delay.
         """
+        self.ensure_index(index_name)
         doc: dict[str, Any] = {
             "chunk_id": chunk.id,
             "document_id": chunk.document_id,
@@ -95,6 +100,7 @@ class ElasticsearchStoreService:
         if not tenant_id:
             raise ValueError("tenant_id is mandatory for Elasticsearch keyword search.")
 
+        self.ensure_index(index_name)
         query: dict[str, Any] = {
             "bool": {
                 "must": [{"match": {"content": query_text}}],

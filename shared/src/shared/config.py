@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", str(Path(__file__).resolve().parent.parent.parent.parent / ".env")),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -81,7 +82,23 @@ class Settings(BaseSettings):
     )
     OPENAI_API_KEY: str | None = Field(
         default=None,
-        description="OpenAI API key used when EMBEDDING_PROVIDER is 'openai'",
+        description="OpenAI API key used when EMBEDDING_PROVIDER is 'openai' or LLM_PROVIDER is 'openai'",
+    )
+    LLM_PROVIDER: str = Field(
+        default="gemini",
+        description="LLM provider selection: 'gemini' (Free Tier), 'grok' (xAI), or 'openai'",
+    )
+    LLM_BASE_URL: str | None = Field(
+        default=None,
+        description="Custom OpenAI-compatible base URL (if overriding provider defaults)",
+    )
+    GEMINI_API_KEY: str | None = Field(
+        default=None,
+        description="Google Gemini API key when LLM_PROVIDER is 'gemini'",
+    )
+    XAI_API_KEY: str | None = Field(
+        default=None,
+        description="xAI Grok API key when LLM_PROVIDER is 'grok'",
     )
     EMBEDDING_MODEL_NAME: str = Field(
         default="all-MiniLM-L6-v2",
@@ -92,15 +109,15 @@ class Settings(BaseSettings):
         description="Dimension size of vector embeddings produced by the model",
     )
     LLM_MODEL_NAME: str = Field(
-        ...,
+        default="gemini-3.5-flash",
         description="Primary Large Language Model name used for generation and evaluation",
     )
     GENERATION_PRIMARY_MODEL: str = Field(
-        default="gpt-4o",
+        default="gemini-3.5-flash",
         description="Flagship model selection used for primary answer synthesis",
     )
     GENERATION_FALLBACK_MODEL: str = Field(
-        default="gpt-4o-mini",
+        default="gemini-3.5-flash",
         description="Fallback model selection used when circuit breaker trips open",
     )
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(

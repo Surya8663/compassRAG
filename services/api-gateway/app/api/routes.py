@@ -4,8 +4,9 @@ Enforces strict JWT authentication and delegates to `GatewayOrchestratorService`
 """
 
 from typing import Annotated
+import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from shared.models.common import QueryRequest, QueryResponse, TenantContext
 
 from app.services.auth import get_current_tenant_context
@@ -22,14 +23,29 @@ TenantContextDep = Annotated[TenantContext, Depends(get_current_tenant_context)]
 
 @router.post("/ingest", response_model=DocumentIngestResponse, status_code=200)
 async def submit_ingestion_job(
-    payload: DocumentIngestRequest,
+    request: Request,
     tenant_context: TenantContextDep,
 ) -> DocumentIngestResponse:
     """
-    Submit a multi-page document for asynchronous ingestion via Celery worker queue.
-    Enforces JWT authentication and tenant scope.
+    Submit a document for ingestion (supports both multipart/form-data UploadFile from UI and JSON DocumentIngestRequest).
     """
-    return gateway_orchestrator.ingest_document(payload, tenant_context)
+    content_type = request.headers.get("content-type", "").lower()
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file = form.get("file")
+        if not file or not hasattr(file, "filename"):
+            raise HTTPException(status_code=400, detail="Missing file in form upload")
+        document_id = str(form.get("document_id") or f"doc_{uuid.uuid4().hex[:8]}")
+        target_tenant = str(form.get("tenant_id") or tenant_context.tenant_id)
+        return await gateway_orchestrator.ingest_upload_file(file, document_id, target_tenant, tenant_context)
+    else:
+        try:
+            data = await request.json()
+            payload = DocumentIngestRequest(**data)
+            return gateway_orchestrator.ingest_document(payload, tenant_context)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {exc}") from exc
+
 
 
 @router.post("/query", response_model=QueryResponse, status_code=200)
@@ -41,7 +57,7 @@ async def process_rag_query(
     Execute the self-correcting RAG pipeline across Retrieval, Correction, and Generation.
     Enforces JWT authentication and document-level RBAC restrictions before retrieval.
     """
-    return gateway_orchestrator.process_query(payload, tenant_context)
+    return await gateway_orchestrator.process_query(payload, tenant_context)
 
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse, status_code=200)

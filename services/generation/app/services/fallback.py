@@ -28,15 +28,11 @@ class FallbackSynthesizerService:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        self.model_name = self.settings.GENERATION_FALLBACK_MODEL or "gpt-4o-mini"
+        self.model_name = self.settings.GENERATION_FALLBACK_MODEL or "gemini-3.5-flash"
         self._openai_client: Any = None
 
-        if self.settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
-            except Exception as exc:
-                logger.warning("Failed to initialize OpenAI client in FallbackSynthesizer: %s", exc)
+        from shared.utils.llm_client import get_llm_client
+        self._openai_client = get_llm_client(self.settings, timeout=5.0)
 
     def synthesize(self, query: str, chunks: list[DocumentChunk]) -> tuple[str, list[Citation]]:
         """

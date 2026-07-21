@@ -33,13 +33,9 @@ class ContradictionDetectorService:
         self._local_model: Any = None
         self._openai_client: Any = None
 
-        if self.provider == "openai" and self.settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
-            except Exception as exc:
-                logger.warning("Failed to initialize OpenAI client for NLI: %s", exc)
-        else:
+        from shared.utils.llm_client import get_llm_client
+        self._openai_client = get_llm_client(self.settings, timeout=5.0)
+        if not self._openai_client:
             if self.settings.ENVIRONMENT != "testing" and self.model_name != "local":
                 try:
                     from sentence_transformers import CrossEncoder
@@ -67,7 +63,7 @@ class ContradictionDetectorService:
                     '"confidence": float between 0.0 and 1.0, "explanation": "string"}'
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -138,49 +134,58 @@ class ContradictionDetectorService:
         to determine if one supersedes the other.
         Returns: (newer_chunk, older_chunk, is_different_date_or_version)
         """
-        meta_a = chunk_a.chunk.metadata
-        meta_b = chunk_b.chunk.metadata
+        meta_a = getattr(chunk_a.chunk if hasattr(chunk_a, "chunk") else chunk_a, "metadata", None) or (chunk_a.get("metadata") if isinstance(chunk_a, dict) else None) or (chunk_a.get("chunk", {}).get("metadata") if isinstance(chunk_a, dict) and isinstance(chunk_a.get("chunk"), dict) else {})
+        meta_b = getattr(chunk_b.chunk if hasattr(chunk_b, "chunk") else chunk_b, "metadata", None) or (chunk_b.get("metadata") if isinstance(chunk_b, dict) else None) or (chunk_b.get("chunk", {}).get("metadata") if isinstance(chunk_b, dict) and isinstance(chunk_b.get("chunk"), dict) else {})
 
+        def get_ver(m: Any) -> str:
+            return str(m.get("version_id", "v1.0") if isinstance(m, dict) else getattr(m, "version_id", "v1.0"))
+
+        def get_ts(m: Any) -> Any:
+            return m.get("ingestion_timestamp") if isinstance(m, dict) else getattr(m, "ingestion_timestamp", None)
+
+        ver_a, ver_b = get_ver(meta_a), get_ver(meta_b)
         # First check version_id (e.g. v2.0 vs v1.0)
-        if meta_a.version_id != meta_b.version_id:
+        if ver_a != ver_b:
             try:
                 # Parse numeric version if format is vX.Y
-                va_num = float(meta_a.version_id.lstrip("vV"))
-                vb_num = float(meta_b.version_id.lstrip("vV"))
+                va_num = float(ver_a.lstrip("vV"))
+                vb_num = float(ver_b.lstrip("vV"))
                 if va_num > vb_num:
                     return chunk_a, chunk_b, True
                 elif vb_num > va_num:
                     return chunk_b, chunk_a, True
             except ValueError:
                 # String comparison fallback
-                if meta_a.version_id > meta_b.version_id:
+                if ver_a > ver_b:
                     return chunk_a, chunk_b, True
-                elif meta_b.version_id > meta_a.version_id:
+                elif ver_b > ver_a:
                     return chunk_b, chunk_a, True
 
         # Check ingestion_timestamp
+        ts_a, ts_b = get_ts(meta_a), get_ts(meta_b)
         if (
-            isinstance(meta_a.ingestion_timestamp, datetime)
-            and isinstance(meta_b.ingestion_timestamp, datetime)
+            isinstance(ts_a, datetime)
+            and isinstance(ts_b, datetime)
+            and ts_a.date() != ts_b.date()
         ):
-            if meta_a.ingestion_timestamp != meta_b.ingestion_timestamp:
-                if meta_a.ingestion_timestamp > meta_b.ingestion_timestamp:
-                    return chunk_a, chunk_b, True
-                else:
-                    return chunk_b, chunk_a, True
-
-        # Check page_number or source difference if dates are identical
-        if meta_a.source != meta_b.source:
-            # If sources differ without date hierarchy, treat as same-date conflict
-            return chunk_a, chunk_b, False
+            if ts_a > ts_b:
+                return chunk_a, chunk_b, True
+            elif ts_b > ts_a:
+                return chunk_b, chunk_a, True
 
         return chunk_a, chunk_b, False
 
-    def check_contradictions(
-        self, chunks: list[RetrievalResult]
+    def detect_and_resolve(
+        self, query: str, chunks: list[RetrievalResult]
     ) -> tuple[bool, bool, list[RetrievalResult], str]:
         """
-        Evaluates candidate chunks for factual contradictions and reconciles supersession.
+        Runs contradiction detection across retrieved candidate chunks.
+        If a contradiction is detected:
+            - If metadata (`version_id` / `ingestion_timestamp`) indicates one chunk is newer,
+              drops the older chunk and retains the newer one (`has_same_date_contradiction=False`).
+            - If both chunks share identical date and version metadata, marks
+              `has_same_date_contradiction=True` so the router transitions to Node 7 (`clarify`).
+
         Returns:
             - contradictions_detected (bool): True if any contradiction was found.
             - has_same_date_contradiction (bool): True if unresolvable same-date contradiction.
@@ -195,6 +200,20 @@ class ContradictionDetectorService:
                 "Fewer than 2 chunks retrieved; contradiction evaluation skipped.",
             )
 
+        def get_chunk_info(res: Any, idx: int) -> tuple[str, str, str]:
+            c = res.chunk if hasattr(res, "chunk") else res
+            if isinstance(c, dict):
+                cid = str(c.get("id") or c.get("chunk_id") or f"chk_{idx}")
+                content = str(c.get("content", ""))
+                meta = c.get("metadata") or {}
+                ver = str(meta.get("version_id", "v1.0") if isinstance(meta, dict) else "v1.0")
+            else:
+                cid = getattr(c, "id", f"chk_{idx}")
+                content = getattr(c, "content", "")
+                meta = getattr(c, "metadata", None)
+                ver = getattr(meta, "version_id", "v1.0") if meta else "v1.0"
+            return cid, content, ver
+
         contradictions_detected = False
         has_same_date_contradiction = False
         superseded_chunk_ids: set[str] = set()
@@ -204,36 +223,39 @@ class ContradictionDetectorService:
             for j in range(i + 1, len(chunks)):
                 ca = chunks[i]
                 cb = chunks[j]
-                if ca.chunk.id in superseded_chunk_ids or cb.chunk.id in superseded_chunk_ids:
+                cid_a, content_a, ver_a = get_chunk_info(ca, i)
+                cid_b, content_b, ver_b = get_chunk_info(cb, j)
+                if cid_a in superseded_chunk_ids or cid_b in superseded_chunk_ids:
                     continue
 
-                verdict, conf, exp = self._evaluate_pair_nli(ca.chunk.content, cb.chunk.content)
+                verdict, conf, exp = self._evaluate_pair_nli(content_a, content_b)
                 if verdict == "CONTRADICTION" and conf >= 0.70:
                     contradictions_detected = True
                     newer, older, is_diff = self._compare_temporal_precedence(ca, cb)
                     if is_diff:
-                        superseded_chunk_ids.add(older.chunk.id)
+                        cid_older, _, _ = get_chunk_info(older, j)
+                        cid_newer, _, _ = get_chunk_info(newer, i)
+                        superseded_chunk_ids.add(cid_older)
                         reasoning_lines.append(
-                            f"Contradiction between `{ca.chunk.id}` "
-                            f"({ca.chunk.metadata.version_id}) and `{cb.chunk.id}` "
-                            f"({cb.chunk.metadata.version_id}): resolved via supersession. "
-                            f"Retained newer `{newer.chunk.id}`, "
-                            f"dropped superseded `{older.chunk.id}`. ({exp})"
+                            f"Contradiction between `{cid_a}` "
+                            f"({ver_a}) and `{cid_b}` "
+                            f"({ver_b}): resolved via supersession. "
+                            f"Retained newer `{cid_newer}`, "
+                            f"dropped superseded `{cid_older}`. ({exp})"
                         )
                     else:
                         has_same_date_contradiction = True
                         reasoning_lines.append(
-                            f"True same-date contradiction between `{ca.chunk.id}` and "
-                            f"`{cb.chunk.id}` (both version `{ca.chunk.metadata.version_id}`). "
-                            f"Unresolvable without user clarification. ({exp})"
+                            f"Unresolvable same-date contradiction detected between `{cid_a}` "
+                            f"and `{cid_b}` ({exp}). Transitioning to clarify workflow."
                         )
                 elif verdict == "ENTAILMENT":
                     reasoning_lines.append(
-                        f"Pair `{ca.chunk.id}` and `{cb.chunk.id}` verified as ENTAILMENT "
+                        f"Pair `{cid_a}` and `{cid_b}` verified as ENTAILMENT "
                         f"({conf:.2f})."
                     )
 
-        resolved_chunks = [c for c in chunks if c.chunk.id not in superseded_chunk_ids]
+        resolved_chunks = [c for idx, c in enumerate(chunks) if get_chunk_info(c, idx)[0] not in superseded_chunk_ids]
         if not reasoning_lines:
             summary = (
                 "All candidate chunk pairs evaluated as NEUTRAL/ENTAILMENT with zero "

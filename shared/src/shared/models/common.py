@@ -176,7 +176,12 @@ class QueryRequest(BaseModel):
     Public query contract sent to the API Gateway.
     """
     query: str = Field(..., description="User question or query to answer")
-    tenant_context: TenantContext = Field(..., description="Security context of user and tenant")
+    tenant_id: str | None = Field(
+        default=None, description="Optional tenant ID passed from client"
+    )
+    tenant_context: TenantContext | None = Field(
+        default=None, description="Security context of user and tenant"
+    )
     top_k: int = Field(default=10, ge=1, description="Number of candidate chunks to retrieve")
     metadata_filter: dict[str, str | int | float | bool] = Field(
         default_factory=dict,

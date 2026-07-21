@@ -30,13 +30,9 @@ class GroundednessCheckerService:
         self._openai_client: Any = None
         self._nlp: Any = None
 
-        if self.provider == "openai" and self.settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
-            except Exception as exc:
-                logger.warning("Failed to initialize OpenAI client for Groundedness: %s", exc)
-        else:
+        from shared.utils.llm_client import get_llm_client
+        self._openai_client = get_llm_client(self.settings, timeout=5.0)
+        if not self._openai_client:
             try:
                 import spacy
                 self._nlp = spacy.load("en_core_web_sm")
@@ -61,7 +57,7 @@ class GroundednessCheckerService:
                     '{"claims": ["claim 1", "claim 2", ...]}'
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -109,7 +105,7 @@ class GroundednessCheckerService:
                     '{"is_entailed": boolean, "reason": "explanation string"}'
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -152,7 +148,11 @@ class GroundednessCheckerService:
         if not claims:
             return 1.0, True, [], "No atomic claims extracted; answer marked grounded."
 
-        context_text = "\n---\n".join([c.chunk.content for c in chunks])
+        def get_chunk_content(item: Any) -> str:
+            c = item.chunk if hasattr(item, "chunk") else item
+            return str(c.get("content", "")) if isinstance(c, dict) else getattr(c, "content", "")
+
+        context_text = "\n---\n".join([get_chunk_content(c) for c in chunks])
         verdicts: list[CorrectionVerdict] = []
         verified_count = 0
 

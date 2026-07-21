@@ -4,11 +4,14 @@ Dispatches authenticated requests to the Ingestion Celery queue (`process_docume
 and invokes the real LangGraph Correction Router engine (`CorrectionRouterGraph`).
 """
 
+import logging
+from typing import Any
 import uuid
 from datetime import UTC, datetime
 
 from celery import Celery
 from fastapi import HTTPException
+import httpx
 from pydantic import BaseModel, Field
 from shared.config import get_settings
 from shared.models.common import (
@@ -21,6 +24,8 @@ from shared.models.common import (
 from app.db.models import DocumentBatchRecord
 from app.db.session import get_sync_session
 from app.services.rbac import rbac_service
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentIngestRequest(BaseModel):
@@ -126,14 +131,55 @@ class GatewayOrchestratorService:
             message="Document ingestion job submitted successfully.",
         )
 
-    def process_query(
+    async def ingest_upload_file(
+        self, file: Any, document_id: str, tenant_id: str, tenant_context: TenantContext
+    ) -> DocumentIngestResponse:
+        """
+        Proxies an uploaded file from API Gateway directly to Ingestion Service (/ingest/upload).
+        """
+        target_tenant = tenant_id or tenant_context.tenant_id
+        content = await file.read()
+
+        async with httpx.AsyncClient() as client:
+            try:
+                files = {"file": (file.filename, content, getattr(file, "content_type", "application/pdf") or "application/pdf")}
+                data = {"document_id": document_id, "tenant_id": target_tenant}
+                resp = await client.post(
+                    f"{self.settings.INGESTION_SERVICE_URL}/ingest/upload",
+                    files=files,
+                    data=data,
+                    headers={"X-Tenant-ID": target_tenant},
+                    timeout=300.0,
+                )
+                if resp.status_code not in (200, 202):
+                    logger.error("Ingestion service upload failed: %s - %s", resp.status_code, resp.text)
+                    raise HTTPException(status_code=resp.status_code, detail=f"Ingestion service error: {resp.text}")
+                res_json = resp.json()
+                job_id = res_json.get("batch_id") or str(uuid.uuid4())
+                return DocumentIngestResponse(
+                    job_id=job_id,
+                    document_id=document_id,
+                    status="COMPLETED",
+                    message="Document successfully processed and indexed into Qdrant/Elasticsearch.",
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error("Failed to forward upload to ingestion service: %s", e)
+                raise HTTPException(status_code=500, detail=f"Ingestion proxy failure: {str(e)}") from e
+
+    async def process_query(
         self, payload: QueryRequest, tenant_context: TenantContext
     ) -> QueryResponse:
         """
         Validates tenant isolation, verifies document-level RBAC restrictions, and executes
-        the LangGraph Correction Router across retrieval, evaluation, and generation.
+        the LangGraph Correction Router across retrieval, evaluation, and generation using async invoke.
         """
-        target_tenant = payload.tenant_context.tenant_id
+        target_tenant = (
+            (payload.tenant_context.tenant_id if payload.tenant_context else None)
+            or payload.tenant_id
+            or tenant_context.tenant_id
+        )
         rbac_service.verify_tenant_scope(tenant_context, target_tenant)
 
         doc_id_filter = payload.metadata_filter.get("document_id")
@@ -151,7 +197,7 @@ class GatewayOrchestratorService:
         initial_state = {
             "query": payload.query,
             "original_query": payload.query,
-            "tenant_id": tenant_context.tenant_id,
+            "tenant_id": target_tenant,
             "attempt_count": 0,
             "retrieved_chunks": [],
             "retrieval_confidence": 0.0,
@@ -168,7 +214,7 @@ class GatewayOrchestratorService:
             "final_status": ConfidenceStatus.VERIFIED,
         }
 
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
 
         return QueryResponse(
             answer=final_state.get("final_answer", "No answer generated."),

@@ -40,10 +40,8 @@ class EmbeddingService:
                 )
         elif self.provider == "openai":
             self.model_name = self.settings.OPENAI_EMBEDDING_MODEL
-            logger.info("Initializing OpenAI client: %s", self.model_name)
-            from openai import OpenAI
-
-            self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
+            from shared.utils.llm_client import get_llm_client
+            self._openai_client = get_llm_client(self.settings, timeout=5.0)
             self._local_model = None
             dim = self.settings.EMBEDDING_DIMENSION
             self.dimension = dim if dim != 384 else 1536

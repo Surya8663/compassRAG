@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -41,7 +42,7 @@ SERVICES = [
 
 
 async def wait_for_health(
-    client: httpx.AsyncClient, name: str, port: int, timeout: float = 15.0
+    client: httpx.AsyncClient, name: str, port: int, timeout: float = 60.0
 ) -> bool:
     url = f"http://localhost:{port}/health"
     start = time.time()
@@ -67,9 +68,9 @@ async def main() -> int:
         "REDIS_URL": "redis://localhost:6379/0",
         "QDRANT_URL": "http://localhost:6333",
         "ELASTICSEARCH_URL": "http://localhost:9200",
-        "EMBEDDING_MODEL_NAME": "BAAI/bge-large-en-v1.5",
-        "EMBEDDING_DIMENSION": "1024",
-        "LLM_MODEL_NAME": "gpt-4o-mini",
+        "EMBEDDING_MODEL_NAME": "all-MiniLM-L6-v2",
+        "EMBEDDING_DIMENSION": "384",
+        "LLM_MODEL_NAME": "gemini-3.5-flash",
         "SIMILARITY_THRESHOLD": "0.75",
         "RETRIEVAL_TOP_K": "10",
         "CORRECTION_CONFIDENCE_THRESHOLD": "0.80",
@@ -78,6 +79,7 @@ async def main() -> int:
         "RETRIEVAL_SERVICE_URL": "http://localhost:8002",
         "CORRECTION_SERVICE_URL": "http://localhost:8003",
         "GENERATION_SERVICE_URL": "http://localhost:8004",
+        "PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
     })
 
     processes = []
@@ -87,10 +89,9 @@ async def main() -> int:
 
     try:
         for s in SERVICES:
+            uv_bin = shutil.which("uv") or r"C:\Users\surya\AppData\Roaming\Python\Python312\Scripts\uv.exe"
             cmd = [
-                "python",
-                "-m",
-                "uv",
+                uv_bin,
                 "run",
                 "--package",
                 str(s["pkg"]),

@@ -40,7 +40,9 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
 
     # If state already has candidate chunks (e.g., passed from API payload on attempt 0),
     # use them directly before any query reformulation attempts
-    if state.get("attempt_count", 0) == 0 and state.get("retrieved_chunks"):
+    if (state.get("attempt_count", 0) == 0 and state.get("retrieved_chunks")) or (
+        state.get("retrieved_chunks") == [] and state.get("retrieval_status") == ConfidenceStatus.LOW_CONFIDENCE
+    ):
         results = state["retrieved_chunks"]
         evaluator = get_retrieval_evaluator()
         avg_score, _, status, _ = evaluator.evaluate_confidence(
@@ -121,7 +123,7 @@ def contradiction_check_node(state: CorrectionGraphState) -> dict[str, Any]:
         {"chunk_count": len(chunks)},
     ) as span:
         t0 = time.perf_counter()
-        detected, same_date, resolved, reasoning = detector.check_contradictions(chunks)
+        detected, same_date, resolved, reasoning = detector.detect_and_resolve(state.get("query", ""), chunks)
         span.set_attribute("contradictions_detected", detected)
         span.set_attribute("same_date_contradiction", same_date)
         PIPELINE_STAGE_DURATION.labels(
@@ -147,21 +149,35 @@ def generate_draft_node(state: CorrectionGraphState) -> dict[str, Any]:
         }
 
     # Draft synthesis based on top candidate content
-    top_c = chunks[0].chunk
+    top_c = chunks[0].chunk if hasattr(chunks[0], "chunk") else chunks[0]
+    if isinstance(top_c, dict):
+        cid = str(top_c.get("id") or top_c.get("chunk_id") or "chk_0")
+        did = str(top_c.get("document_id", "doc_0"))
+        meta = top_c.get("metadata") or {}
+        src = str(meta.get("source") if isinstance(meta, dict) else (top_c.get("source") or "unknown"))
+        pnum = int(meta.get("page_number") if isinstance(meta, dict) and meta.get("page_number") is not None else (top_c.get("page_number") or 1))
+        content_str = str(top_c.get("content", ""))
+    else:
+        cid = getattr(top_c, "id", "chk_0")
+        did = getattr(top_c, "document_id", "doc_0")
+        meta = getattr(top_c, "metadata", None)
+        src = getattr(meta, "source", "unknown") if meta else getattr(top_c, "source", "unknown")
+        pnum = getattr(meta, "page_number", 1) if meta else getattr(top_c, "page_number", 1)
+        content_str = getattr(top_c, "content", "")
+
     citations = [
         Citation(
-            chunk_id=top_c.id,
-            document_id=top_c.document_id,
-            source=top_c.metadata.source,
-            page_number=top_c.metadata.page_number,
-            quote_snippet=top_c.content[:100],
+            chunk_id=cid,
+            document_id=did,
+            source=src,
+            page_number=pnum,
+            quote_snippet=content_str[:100],
         )
     ]
 
     logger.debug("Generating draft answer for query: '%s'", query)
-    draft = top_c.content
     return {
-        "draft_answer": draft,
+        "draft_answer": content_str,
         "draft_citations": citations,
     }
 

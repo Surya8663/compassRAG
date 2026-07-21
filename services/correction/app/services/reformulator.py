@@ -26,12 +26,8 @@ class QueryReformulatorService:
         self.provider = self.settings.EMBEDDING_PROVIDER
         self._openai_client: Any = None
 
-        if self.provider == "openai" and self.settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=self.settings.OPENAI_API_KEY)
-            except Exception as exc:
-                logger.warning("Failed to initialize OpenAI client for Reformulator: %s", exc)
+        from shared.utils.llm_client import get_llm_client
+        self._openai_client = get_llm_client(self.settings, timeout=5.0)
 
     def _apply_hyde(self, query: str) -> str:
         """
@@ -47,7 +43,7 @@ class QueryReformulatorService:
                     "Respond with only the hypothetical passage text."
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.3,
                 )
@@ -78,7 +74,7 @@ class QueryReformulatorService:
                     '{"queries": ["query 1", "query 2", "query 3"]}'
                 )
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.3,

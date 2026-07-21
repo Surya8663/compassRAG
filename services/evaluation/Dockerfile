@@ -1,6 +1,6 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-WORKDIR /app
+WORKDIR /workspace
 
 # Install system dependencies needed for PyMuPDF / report rendering
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,19 +8,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast dependency resolution
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Enable bytecode compilation and non-interactive sync
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 
-# Copy workspace configuration and shared library
+# Copy workspace pyproject.toml, uv.lock, shared module, and all services
 COPY pyproject.toml uv.lock ./
 COPY shared/ ./shared/
-COPY services/retrieval/ ./services/retrieval/
-COPY services/correction/ ./services/correction/
-COPY services/generation/ ./services/generation/
-COPY services/evaluation/ ./services/evaluation/
+COPY services/ ./services/
 
-# Install dependencies using uv
-RUN uv sync --frozen --package compass-rag-evaluation
+# Sync dependencies for this package without dev deps
+RUN uv sync --package compass-rag-evaluation --no-dev
+
+WORKDIR /workspace/services/evaluation
 
 # Expose evaluation API port
 EXPOSE 8005

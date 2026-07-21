@@ -6,12 +6,10 @@ WORKDIR /workspace
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
-# Copy workspace pyproject.toml and shared module
-COPY pyproject.toml ./
+# Copy workspace pyproject.toml, uv.lock, shared module, and all services
+COPY pyproject.toml uv.lock ./
 COPY shared/ ./shared/
-
-# Copy target service
-COPY services/ingestion/ ./services/ingestion/
+COPY services/ ./services/
 
 # Sync dependencies for this package without dev deps
 RUN uv sync --package compass-rag-ingestion --no-dev

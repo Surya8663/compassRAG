@@ -75,6 +75,7 @@ class QdrantStoreService:
         """
         Upserts a DocumentChunk and its dense vector representation into Qdrant.
         """
+        self.ensure_collection(collection_name=collection_name, dimension=len(vector))
         point_id = self._to_point_id(chunk.id)
         payload: dict[str, Any] = {
             "chunk_id": chunk.id,
@@ -117,6 +118,8 @@ class QdrantStoreService:
         """
         if not tenant_id:
             raise ValueError("tenant_id is mandatory for Qdrant vector search.")
+
+        self.ensure_collection(collection_name=collection_name, dimension=len(query_vector))
 
         tenant_filter = models.Filter(
             must=[

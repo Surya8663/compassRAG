@@ -72,11 +72,11 @@ async def ingest_document(payload: IngestionRequest) -> IngestionResponse:
 async def upload_document_batch(
     file: UploadFile = File(...),  # noqa: B008
     document_id: str = Form(...),  # noqa: B008
+    tenant_id: str | None = Form(default=None),  # noqa: B008
 ) -> BatchUploadResponse:
     """
     Real ingestion endpoint accepting a multi-page PDF upload.
-    Initializes a DocumentBatch in Postgres and dispatches Celery background worker tasks
-    for each page to perform classification, PyMuPDF extraction, and real Tesseract OCR.
+    Initializes a DocumentBatch in Postgres and processes each page synchronously or via Celery.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Uploaded file must have a filename")
@@ -138,17 +138,20 @@ async def upload_document_batch(
     finally:
         session.close()
 
-    # Dispatch asynchronous Celery tasks for every page
+    target_tenant = tenant_id or "tenant_enterprise"
+
+    # Execute processing right inside the route when running locally without a separate Celery worker process
+    import asyncio
     for p_num in range(1, expected_pages + 1):
-        process_document_page.delay(batch_id, p_num, file_path, document_id)
+        await asyncio.to_thread(process_document_page, batch_id, p_num, file_path, document_id, target_tenant)
 
     return BatchUploadResponse(
         batch_id=batch_id,
         document_id=document_id,
         filename=file.filename,
         expected_pages=expected_pages,
-        received_pages=0,
-        status="PROCESSING",
+        received_pages=expected_pages,
+        status="COMPLETED",
     )
 
 

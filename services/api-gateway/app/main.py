@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from shared.config import get_settings
 from shared.logging import RequestIdMiddleware, setup_logging
 from shared.metrics import setup_metrics
@@ -26,6 +27,15 @@ app = FastAPI(
     title="Compass RAG - API Gateway",
     description="Main entrypoint orchestrating the self-correcting RAG pipeline across services",
     version="0.1.0",
+)
+
+# Enable CORS for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Apply FastAPI auto-instrumentation

@@ -19,7 +19,7 @@ def _utc_now() -> datetime:
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=5)  # type: ignore[untyped-decorator]
 def process_document_page(
-    self: Any, batch_id: str, page_number: int, file_path: str, document_id: str
+    self: Any, batch_id: str, page_number: int, file_path: str, document_id: str, tenant_id: str = "tenant_enterprise"
 ) -> dict[str, Any]:
     """
     Celery task to process a single PDF page asynchronously:
@@ -101,11 +101,29 @@ def process_document_page(
                         source=batch.filename,
                         page_number=page_number,
                         ingestion_timestamp=batch.created_at,
-                        tenant_id="tenant_default",
+                        tenant_id=tenant_id,
                         version_id="v1",
                         ocr_confidence=page.ocr_confidence,
                     )
                     chunks_data = [chunk.model_dump(mode="json") for chunk in chunks]
+
+                    # Index into Qdrant vector store and Elasticsearch BM25 index
+                    try:
+                        from services.retrieval.app.services.qdrant_store import get_qdrant_store
+                        from services.retrieval.app.services.es_store import get_es_store
+                        from services.retrieval.app.services.embedder import get_embedding_service
+
+                        q_store = get_qdrant_store()
+                        es_store = get_es_store()
+                        embedder = get_embedding_service()
+
+                        for chunk in chunks:
+                            vector = embedder.embed_text(chunk.content)
+                            q_store.upsert_chunk(chunk, vector)
+                            es_store.index_chunk(chunk)
+                    except Exception as index_exc:
+                        import logging
+                        logging.getLogger(__name__).error("Failed to index chunks into Qdrant/Elasticsearch: %s", index_exc)
 
         except Exception as exc:
             page.status = "FAILED"

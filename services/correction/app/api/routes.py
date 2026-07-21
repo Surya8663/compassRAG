@@ -14,8 +14,8 @@ from shared.models.common import (
     RetrievalResult,
 )
 
-from services.correction.app.services.graph import get_correction_graph
-from services.correction.app.services.state import CorrectionGraphState
+from app.services.graph import get_correction_graph
+from app.services.state import CorrectionGraphState
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/correct", tags=["correction"])
