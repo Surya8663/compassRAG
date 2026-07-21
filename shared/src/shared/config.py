@@ -95,6 +95,24 @@ class Settings(BaseSettings):
         ...,
         description="Primary Large Language Model name used for generation and evaluation",
     )
+    GENERATION_PRIMARY_MODEL: str = Field(
+        default="gpt-4o",
+        description="Flagship model selection used for primary answer synthesis",
+    )
+    GENERATION_FALLBACK_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="Fallback model selection used when circuit breaker trips open",
+    )
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(
+        default=5,
+        ge=1,
+        description="Consecutive failure threshold to open the circuit breaker",
+    )
+    CIRCUIT_BREAKER_RESET_TIMEOUT: float = Field(
+        default=30.0,
+        ge=0.1,
+        description="Seconds to remain in open state before allowing half-open retry",
+    )
 
     # --------------------------------------------------------------------------
     # 4. RAG PIPELINE & SELF-CORRECTION THRESHOLDS
