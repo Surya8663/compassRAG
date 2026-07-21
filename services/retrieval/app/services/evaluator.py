@@ -47,10 +47,16 @@ class RetrievalConfidenceEvaluator:
             logger.warning(msg)
             return (0.0, False, ConfidenceStatus.LOW_CONFIDENCE, msg)
 
-        scores = [
-            r.rerank_score if r.rerank_score is not None else r.fused_score
-            for r in results
-        ]
+        scores = []
+        for r in results:
+            if hasattr(r, "rerank_score") and r.rerank_score is not None:
+                scores.append(float(r.rerank_score))
+            elif hasattr(r, "fused_score"):
+                scores.append(float(r.fused_score))
+            elif isinstance(r, dict):
+                scores.append(float(r.get("rerank_score") or r.get("fused_score") or 1.0))
+            else:
+                scores.append(1.0)
         avg_score = float(sum(scores) / len(scores))
 
         if avg_score >= eval_threshold:

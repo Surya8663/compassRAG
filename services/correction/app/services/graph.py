@@ -56,9 +56,24 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
         results, avg_score, status, _ = await retriever.retrieve(
             query=query, tenant_id=tenant_id, top_k=settings.RETRIEVAL_TOP_K
         )
+        if not results and state.get("retrieved_chunks"):
+            logger.info(
+                "External retrieval returned 0 chunks for query; keeping existing candidate chunks."
+            )
+            results = state["retrieved_chunks"]
+            evaluator = get_retrieval_evaluator()
+            avg_score, _, status, _ = evaluator.evaluate_confidence(
+                results=results, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
+            )
     except Exception as exc:
-        logger.warning("Retriever failed during graph traversal (`%s`); using empty.", exc)
-        results, avg_score, status = [], 0.0, ConfidenceStatus.LOW_CONFIDENCE
+        logger.warning(
+            "Retriever failed during graph traversal (`%s`); using existing chunks.", exc
+        )
+        results = state.get("retrieved_chunks", [])
+        evaluator = get_retrieval_evaluator()
+        avg_score, _, status, _ = evaluator.evaluate_confidence(
+            results=results, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
+        )
 
     return {
         "retrieved_chunks": results,
