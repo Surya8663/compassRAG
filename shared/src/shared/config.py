@@ -184,6 +184,26 @@ class Settings(BaseSettings):
         description="Internal base URL for the Generation service",
     )
 
+    # --------------------------------------------------------------------------
+    # 6. API GATEWAY & AUTHENTICATION CONFIGURATION
+    # --------------------------------------------------------------------------
+    AUTH_ENABLED: bool = Field(
+        default=True,
+        description="Enforce JWT validation and RBAC checks across API Gateway endpoints",
+    )
+    JWT_SECRET_KEY: str = Field(
+        default="compass-rag-dev-secret-key-32bytes-long!!",
+        description="Secret key used for HS256 symmetric JWT signature verification in dev/tests",
+    )
+    JWT_ALGORITHM: str = Field(
+        default="HS256",
+        description="JWT cryptographic signing algorithm (HS256 or RS256)",
+    )
+    KEYCLOAK_JWKS_URL: str = Field(
+        default="http://localhost:8080/realms/compass-rag/protocol/openid-connect/certs",
+        description="Keycloak JWKS URL for fetching public RSA verification keys in RS256 mode",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
