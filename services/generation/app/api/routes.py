@@ -1,18 +1,16 @@
 from fastapi import APIRouter
 from shared.models.common import GenerationRequest, GenerationResponse
 
+from app.services import get_generation_service
+
 router = APIRouter(prefix="/generate", tags=["generation"])
 
 
 @router.post("", response_model=GenerationResponse, status_code=200)
 async def generate_answer(payload: GenerationRequest) -> GenerationResponse:
     """
-    Scaffolding endpoint for grounded LLM answer generation.
-    TODO: Implement LLM synthesis using LLM_MODEL_NAME grounded strictly on
-    payload.chunks with citation tracking and confidence estimation.
+    Endpoint for grounded LLM answer generation and citation tracking.
+    Executes circuit breaker resilience and mandatory groundedness checking.
     """
-    return GenerationResponse(
-        answer="Scaffolding generation placeholder: answer will be generated from context chunks.",
-        citations=[],
-        confidence_score=1.0,
-    )
+    service = get_generation_service()
+    return service.generate(query=payload.query, chunks=payload.chunks)
