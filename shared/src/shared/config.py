@@ -204,6 +204,26 @@ class Settings(BaseSettings):
         description="Keycloak JWKS URL for fetching public RSA verification keys in RS256 mode",
     )
 
+    # --------------------------------------------------------------------------
+    # 7. OBSERVABILITY: OPENTELEMETRY + PROMETHEUS
+    # --------------------------------------------------------------------------
+    OTEL_ENABLED: bool = Field(
+        default=True,
+        description="Enable OpenTelemetry distributed tracing via OTLP-HTTP exporter",
+    )
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = Field(
+        default="http://localhost:4318",
+        description="Base URL of the OTLP-HTTP collector (Jaeger / OTEL Collector)",
+    )
+    OTEL_SERVICE_NAME: str = Field(
+        default="compass-rag",
+        description="Logical service name reported to the OTel collector",
+    )
+    PROMETHEUS_ENABLED: bool = Field(
+        default=True,
+        description="Expose Prometheus /metrics endpoint on every FastAPI service",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
