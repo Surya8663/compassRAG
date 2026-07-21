@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from shared.config import get_settings
 from shared.logging import RequestIdMiddleware, setup_logging
+from shared.metrics import setup_metrics
+from shared.telemetry import instrument_fastapi, setup_telemetry
 
 from app.api.health import router as health_router
 from app.api.routes import router as ingestion_router
@@ -10,6 +12,13 @@ from app.db.session import init_db
 settings = get_settings()
 setup_logging(
     service_name="compass-rag-ingestion", log_level=settings.LOG_LEVEL, json_logs=settings.JSON_LOGS
+)
+
+# Initialize OpenTelemetry distributed tracing
+setup_telemetry(
+    service_name="compass-rag-ingestion",
+    otlp_endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+    enabled=settings.OTEL_ENABLED,
 )
 
 # Initialize database tables
@@ -25,9 +34,16 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Add distributed tracing middleware (`X-Request-ID` propagation)
+# Apply FastAPI auto-instrumentation (must run before routes are registered)
+instrument_fastapi(app)
+
+# Add request-id / structlog / Prometheus middleware
 app.add_middleware(RequestIdMiddleware, service_name="compass-rag-ingestion")
 
 # Include API routes
 app.include_router(health_router)
 app.include_router(ingestion_router)
+
+# Expose /metrics endpoint (after routes so all paths are discovered)
+if settings.PROMETHEUS_ENABLED:
+    setup_metrics(app, service_name="compass-rag-ingestion")
