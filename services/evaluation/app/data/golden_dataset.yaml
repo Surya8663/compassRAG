@@ -1,0 +1,122 @@
+# Compass RAG 15-Question Golden Dataset
+# Contains exact category counts: 4 directly_answerable, 3 ocr_dependent, 3 contradictory_document, 2 ambiguous, 3 unanswerable.
+
+- id: Q1
+  category: directly_answerable
+  question: "What is the annual hardware stipend amount for purchasing IT equipment?"
+  expected_answer: "Every full-time employee is entitled to a $1,500 annual hardware stipend for purchasing laptops, monitors, and ergonomic accessories."
+  expected_keywords: ["1,500", "hardware", "stipend"]
+  expected_chunk_ids: ["handbook_2026.pdf"]
+  should_abstain: false
+
+- id: Q2
+  category: directly_answerable
+  question: "Between what hours must employees be available for synchronous collaboration?"
+  expected_answer: "All staff must be available for synchronous collaboration between 10:00 AM and 3:00 PM EST Monday through Friday."
+  expected_keywords: ["10:00 AM", "3:00 PM", "synchronous"]
+  expected_chunk_ids: ["handbook_2026.pdf"]
+  should_abstain: false
+
+- id: Q3
+  category: directly_answerable
+  question: "How many paid annual leave days do employees receive each year and how many can be carried over?"
+  expected_answer: "Employees receive 20 days of paid annual leave per year, and up to 5 unused leave days can be carried over to the following calendar year."
+  expected_keywords: ["20 days", "5 unused", "carry-over"]
+  expected_chunk_ids: ["handbook_2026.pdf"]
+  should_abstain: false
+
+- id: Q4
+  category: directly_answerable
+  question: "What is the monthly wellness stipend amount provided by the company?"
+  expected_answer: "The company provides a $75 monthly wellness stipend for gym memberships, mental health apps, and fitness tracking equipment."
+  expected_keywords: ["75", "monthly", "wellness"]
+  expected_chunk_ids: ["handbook_2026.pdf"]
+  should_abstain: false
+
+- id: Q5
+  category: ocr_dependent
+  question: "What is the total amount due on the reimbursement invoice from Apex Catering Services?"
+  expected_answer: "The total amount due on the invoice from Apex Catering Services is $485.50."
+  expected_keywords: ["485.50", "Apex Catering", "total"]
+  expected_chunk_ids: ["reimbursement_receipt_scanned.pdf"]
+  should_abstain: false
+
+- id: Q6
+  category: ocr_dependent
+  question: "What is the Tax ID number listed for Apex Catering Services on the receipt?"
+  expected_answer: "The Tax ID listed for Apex Catering Services is 99-8877665."
+  expected_keywords: ["99-8877665", "Tax ID"]
+  expected_chunk_ids: ["reimbursement_receipt_scanned.pdf"]
+  should_abstain: false
+
+- id: Q7
+  category: ocr_dependent
+  question: "What is the date of the client dinner on the official reimbursement invoice?"
+  expected_answer: "The date on the reimbursement invoice is 2026-03-15."
+  expected_keywords: ["2026-03-15", "dinner"]
+  expected_chunk_ids: ["reimbursement_receipt_scanned.pdf"]
+  should_abstain: false
+
+- id: Q8
+  category: contradictory_document
+  question: "What is the maximum allowable hotel accommodation expense per night under the current travel policy?"
+  expected_answer: "Under the revised Version 2.0 travel policy effective January 1, 2026, the maximum allowable hotel accommodation expense is $250 per night, superseding the $150 limit from Version 1.0 (2024)."
+  expected_keywords: ["250", "supersedes", "Version 2.0"]
+  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
+  should_abstain: false
+
+- id: Q9
+  category: contradictory_document
+  question: "What is the international meal per diem cap under the revised 2026 travel guidelines?"
+  expected_answer: "The international meal per diem is updated to $95 per day under Version 2.0 (2026), superseding the previous $65 cap from 2024."
+  expected_keywords: ["95", "per day", "meal per diem"]
+  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
+  should_abstain: false
+
+- id: Q10
+  category: contradictory_document
+  question: "What is the minimum flight duration required to be eligible for business class flights under the current policy?"
+  expected_answer: "Business class flights are permitted for any international flight exceeding 8 hours under Version 2.0 (2026), which reduced the threshold from 10 hours in Version 1.0."
+  expected_keywords: ["8 hours", "business class"]
+  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
+  should_abstain: false
+
+- id: Q11
+  category: ambiguous
+  question: "Can I work remotely every Friday without prior approval?"
+  expected_answer: "The policy states that remote work on ad-hoc days is subject to manager discretion and operational requirements, but approval processes vary by department. Clarification is required."
+  expected_keywords: ["manager discretion", "operational requirements", "ad-hoc"]
+  expected_chunk_ids: ["remote_work_guidelines.pdf"]
+  should_abstain: true
+
+- id: Q12
+  category: ambiguous
+  question: "What is the exact notification deadline for requesting remote work on ad-hoc days?"
+  expected_answer: "The guidelines do not specify a single exact universal notification deadline; rather, notification deadlines vary by department, project phase, and sprint schedule."
+  expected_keywords: ["vary by department", "project phase"]
+  expected_chunk_ids: ["remote_work_guidelines.pdf"]
+  should_abstain: true
+
+- id: Q13
+  category: unanswerable
+  question: "What is the company's policy regarding cryptocurrency staking rewards on corporate treasury funds?"
+  expected_answer: "There is insufficient information in the provided documents regarding cryptocurrency staking policies."
+  expected_keywords: ["insufficient information", "not covered"]
+  expected_chunk_ids: []
+  should_abstain: true
+
+- id: Q14
+  category: unanswerable
+  question: "What is the personal mobile phone number of the Chief Executive Officer?"
+  expected_answer: "The provided documents do not contain any information regarding the CEO's personal mobile phone number."
+  expected_keywords: ["insufficient information", "not found"]
+  expected_chunk_ids: []
+  should_abstain: true
+
+- id: Q15
+  category: unanswerable
+  question: "What is the relocation bonus amount for transferring to the Mars colony in 2030?"
+  expected_answer: "There is no information in the corpus about a relocation bonus for transferring to a Mars colony."
+  expected_keywords: ["insufficient information", "not documented"]
+  expected_chunk_ids: []
+  should_abstain: true
