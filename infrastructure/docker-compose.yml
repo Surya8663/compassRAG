@@ -79,6 +79,24 @@ services:
       retries: 10
 
   # ============================================================================
+  # 2. OBSERVABILITY STACK
+  # ============================================================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: compass_jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:16686 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
   # 2. FASTAPI MICROSERVICES
   # ============================================================================
   ingestion:
@@ -93,6 +111,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-ingestion
     ports:
       - "8001:8001"
     depends_on:
@@ -104,6 +124,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   retrieval:
     build:
@@ -117,6 +139,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-retrieval
     ports:
       - "8002:8002"
     depends_on:
@@ -128,6 +152,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   correction:
     build:
@@ -141,6 +167,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-correction
     ports:
       - "8003:8003"
     depends_on:
@@ -148,6 +176,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   generation:
     build:
@@ -161,6 +191,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-generation
     ports:
       - "8004:8004"
     depends_on:
@@ -168,6 +200,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   api-gateway:
     build:
@@ -186,6 +220,8 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/compass-rag/protocol/openid-connect/certs
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=compass-rag-api-gateway
     ports:
       - "8000:8000"
     depends_on:
@@ -198,6 +234,8 @@ services:
       generation:
         condition: service_started
       keycloak:
+        condition: service_started
+      jaeger:
         condition: service_started
 
 volumes:
