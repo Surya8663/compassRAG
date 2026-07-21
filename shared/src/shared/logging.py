@@ -55,8 +55,9 @@ def setup_logging(service_name: str, log_level: str = "INFO", json_logs: bool = 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """
-    FastAPI/Starlette middleware that extracts or generates an `X-Request-ID` header,
-    binds it to `structlog` context variables (`request_id`), and logs HTTP lifecycle events.
+    FastAPI/Starlette middleware that extracts or generates an ``X-Request-ID`` header,
+    binds it to ``structlog`` context variables (``request_id``), injects the active
+    OpenTelemetry ``trace_id`` into log records, and records Prometheus HTTP metrics.
     """
 
     def __init__(self, app: Any, service_name: str) -> None:
@@ -73,10 +74,24 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
+        # Inject OTel trace_id into structured logs so traces and logs are correlated
+        try:
+            from shared.telemetry import get_current_trace_id
+            structlog.contextvars.bind_contextvars(trace_id=get_current_trace_id())
+        except Exception:  # pragma: no cover — graceful degradation
+            pass
+
         start_time = time.perf_counter()
         method = request.method
         url = str(request.url.path)
         client_ip = request.client.host if request.client else "unknown"
+
+        # Increment active requests gauge
+        try:
+            from shared.metrics import ACTIVE_REQUESTS
+            ACTIVE_REQUESTS.labels(service=self.service_name).inc()
+        except Exception:  # pragma: no cover
+            pass
 
         self.logger.info(
             "HTTP request started",
@@ -87,10 +102,26 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            duration_s = time.perf_counter() - start_time
+            duration_ms = round(duration_s * 1000, 2)
 
             # Ensure X-Request-ID is propagated in the response headers
             response.headers["X-Request-ID"] = request_id
+
+            # Record Prometheus HTTP metrics
+            try:
+                from shared.metrics import HTTP_REQUEST_LATENCY, HTTP_REQUESTS_TOTAL
+                HTTP_REQUESTS_TOTAL.labels(
+                    service=self.service_name,
+                    method=method,
+                    path=url,
+                    status_code=str(response.status_code),
+                ).inc()
+                HTTP_REQUEST_LATENCY.labels(
+                    service=self.service_name, path=url
+                ).observe(duration_s)
+            except Exception:  # pragma: no cover
+                pass
 
             self.logger.info(
                 "HTTP request completed",
@@ -111,4 +142,10 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             )
             raise exc
         finally:
+            # Decrement active requests gauge
+            try:
+                from shared.metrics import ACTIVE_REQUESTS
+                ACTIVE_REQUESTS.labels(service=self.service_name).dec()
+            except Exception:  # pragma: no cover
+                pass
             structlog.contextvars.clear_contextvars()
