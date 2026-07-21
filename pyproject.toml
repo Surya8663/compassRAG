@@ -39,6 +39,8 @@ dev = [
     "psycopg2-binary>=2.9.9",
     "asyncpg>=0.29.0",
     "cohere>=5.0.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.2.0",
 ]
 
 [tool.uv.sources]
