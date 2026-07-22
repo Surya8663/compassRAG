@@ -13,6 +13,24 @@ from shared.models.common import RetrievalResult
 logger = logging.getLogger(__name__)
 
 
+import math
+
+
+def _normalize_score(val: float) -> float:
+    """Safely converts raw reranker score/logit into a calibrated [0.0, 1.0] confidence float."""
+    if val is None or math.isnan(val) or math.isinf(val):
+        return 0.0
+    # If already in [0, 1] range (e.g. Cohere relevance score)
+    if 0.0 <= val <= 1.0:
+        return float(val)
+    # Apply sigmoid for raw cross-encoder logits
+    try:
+        sig = 1.0 / (1.0 + math.exp(-val))
+        return max(0.0, min(1.0, float(sig)))
+    except Exception:
+        return 0.0
+
+
 class RerankerService:
     """
     Reranks candidate RetrievalResult items using Cross-Encoder models.
@@ -54,7 +72,7 @@ class RerankerService:
         if not query or not query.strip():
             # If query is empty, preserve existing RRF ordering
             for r in results:
-                r.rerank_score = r.fused_score
+                r.rerank_score = _normalize_score(r.fused_score)
             return results[:top_k]
 
         if self.provider == "local":
@@ -63,17 +81,16 @@ class RerankerService:
                 scores = self._local_model.predict(pairs)
                 # Handle scalar vs array return types from sentence_transformers
                 if hasattr(scores, "__iter__") and not isinstance(scores, (str, bytes)):
-                    score_list = [float(s) for s in scores]
+                    score_list = [_normalize_score(float(s)) for s in scores]
                 else:
-                    score_list = [float(scores)]
+                    score_list = [_normalize_score(float(scores))]
 
                 for idx, r in enumerate(results):
                     r.rerank_score = score_list[idx]
             except Exception as exc:
                 logger.error("Local CrossEncoder reranking failed: %s", exc)
-                # Fallback to fused_score if model prediction fails
                 for r in results:
-                    r.rerank_score = r.fused_score
+                    r.rerank_score = _normalize_score(r.fused_score)
 
             results.sort(
                 key=lambda r: r.rerank_score if r.rerank_score is not None else 0.0,
@@ -93,13 +110,13 @@ class RerankerService:
                 reranked_items: list[RetrievalResult] = []
                 for hit in resp.results:
                     item = results[hit.index]
-                    item.rerank_score = float(hit.relevance_score)
+                    item.rerank_score = _normalize_score(float(hit.relevance_score))
                     reranked_items.append(item)
                 return reranked_items
             except Exception as exc:
                 logger.error("Cohere rerank API call failed: %s", exc)
                 for r in results:
-                    r.rerank_score = r.fused_score
+                    r.rerank_score = _normalize_score(r.fused_score)
                 results.sort(
                     key=lambda r: r.rerank_score if r.rerank_score is not None else 0.0,
                     reverse=True,

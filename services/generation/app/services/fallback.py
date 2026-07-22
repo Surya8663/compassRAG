@@ -127,26 +127,21 @@ class FallbackSynthesizerService:
                 continue
             cid = str(item.get("chunk_id", "")).strip()
             snippet = str(item.get("quote_snippet", "")).strip()
-            target_chunk = chunk_map.get(cid) or chunks[0]
+            target_chunk = chunk_map.get(cid)
+
+            if not target_chunk:
+                logger.warning("Fallback citation references unknown chunk_id: '%s'. Skipping.", cid)
+                continue
+
+            quote = snippet if (snippet and snippet.lower() in target_chunk.content.lower()) else (snippet or target_chunk.content[:150])
+
             citations.append(
                 Citation(
                     chunk_id=target_chunk.id,
                     document_id=target_chunk.document_id,
                     source=target_chunk.metadata.source,
                     page_number=target_chunk.metadata.page_number,
-                    quote_snippet=snippet or target_chunk.content[:100],
-                )
-            )
-
-        if not citations and chunks:
-            top_c = chunks[0]
-            citations.append(
-                Citation(
-                    chunk_id=top_c.id,
-                    document_id=top_c.document_id,
-                    source=top_c.metadata.source,
-                    page_number=top_c.metadata.page_number,
-                    quote_snippet=top_c.content[:100],
+                    quote_snippet=quote,
                 )
             )
 

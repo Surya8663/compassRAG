@@ -1,5 +1,6 @@
-# Compass RAG 15-Question Golden Dataset
-# Contains exact category counts: 4 directly_answerable, 3 ocr_dependent, 3 contradictory_document, 2 ambiguous, 3 unanswerable.
+# Compass RAG 12-Question Golden Dataset
+# Exactly 12 questions matching requirement 7:
+# 4 answerable, 2 OCR-dependent, 2 unanswerable, 2 contradictory, 1 ambiguous, 1 Surya/HiDevs resume.
 
 - id: Q1
   category: directly_answerable
@@ -50,54 +51,6 @@
   should_abstain: false
 
 - id: Q7
-  category: ocr_dependent
-  question: "What is the date of the client dinner on the official reimbursement invoice?"
-  expected_answer: "The date on the reimbursement invoice is 2026-03-15."
-  expected_keywords: ["2026-03-15", "dinner"]
-  expected_chunk_ids: ["reimbursement_receipt_scanned.pdf"]
-  should_abstain: false
-
-- id: Q8
-  category: contradictory_document
-  question: "What is the maximum allowable hotel accommodation expense per night under the current travel policy?"
-  expected_answer: "Under the revised Version 2.0 travel policy effective January 1, 2026, the maximum allowable hotel accommodation expense is $250 per night, superseding the $150 limit from Version 1.0 (2024)."
-  expected_keywords: ["250", "supersedes", "Version 2.0"]
-  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
-  should_abstain: false
-
-- id: Q9
-  category: contradictory_document
-  question: "What is the international meal per diem cap under the revised 2026 travel guidelines?"
-  expected_answer: "The international meal per diem is updated to $95 per day under Version 2.0 (2026), superseding the previous $65 cap from 2024."
-  expected_keywords: ["95", "per day", "meal per diem"]
-  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
-  should_abstain: false
-
-- id: Q10
-  category: contradictory_document
-  question: "What is the minimum flight duration required to be eligible for business class flights under the current policy?"
-  expected_answer: "Business class flights are permitted for any international flight exceeding 8 hours under Version 2.0 (2026), which reduced the threshold from 10 hours in Version 1.0."
-  expected_keywords: ["8 hours", "business class"]
-  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
-  should_abstain: false
-
-- id: Q11
-  category: ambiguous
-  question: "Can I work remotely every Friday without prior approval?"
-  expected_answer: "The policy states that remote work on ad-hoc days is subject to manager discretion and operational requirements, but approval processes vary by department. Clarification is required."
-  expected_keywords: ["manager discretion", "operational requirements", "ad-hoc"]
-  expected_chunk_ids: ["remote_work_guidelines.pdf"]
-  should_abstain: true
-
-- id: Q12
-  category: ambiguous
-  question: "What is the exact notification deadline for requesting remote work on ad-hoc days?"
-  expected_answer: "The guidelines do not specify a single exact universal notification deadline; rather, notification deadlines vary by department, project phase, and sprint schedule."
-  expected_keywords: ["vary by department", "project phase"]
-  expected_chunk_ids: ["remote_work_guidelines.pdf"]
-  should_abstain: true
-
-- id: Q13
   category: unanswerable
   question: "What is the company's policy regarding cryptocurrency staking rewards on corporate treasury funds?"
   expected_answer: "There is insufficient information in the provided documents regarding cryptocurrency staking policies."
@@ -105,7 +58,7 @@
   expected_chunk_ids: []
   should_abstain: true
 
-- id: Q14
+- id: Q8
   category: unanswerable
   question: "What is the personal mobile phone number of the Chief Executive Officer?"
   expected_answer: "The provided documents do not contain any information regarding the CEO's personal mobile phone number."
@@ -113,10 +66,34 @@
   expected_chunk_ids: []
   should_abstain: true
 
-- id: Q15
-  category: unanswerable
-  question: "What is the relocation bonus amount for transferring to the Mars colony in 2030?"
-  expected_answer: "There is no information in the corpus about a relocation bonus for transferring to a Mars colony."
-  expected_keywords: ["insufficient information", "not documented"]
-  expected_chunk_ids: []
+- id: Q9
+  category: contradictory_document
+  question: "What is the maximum allowable hotel accommodation expense per night under the current travel policy?"
+  expected_answer: "Under the revised Version 2.0 travel policy effective January 1, 2026, the maximum allowable hotel accommodation expense is $250 per night, superseding the $150 limit from Version 1.0 (2024)."
+  expected_keywords: ["250", "supersedes", "Version 2.0"]
+  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
+  should_abstain: false
+
+- id: Q10
+  category: contradictory_document
+  question: "What is the international meal per diem cap under the revised 2026 travel guidelines?"
+  expected_answer: "The international meal per diem is updated to $95 per day under Version 2.0 (2026), superseding the previous $65 cap from 2024."
+  expected_keywords: ["95", "per day", "meal per diem"]
+  expected_chunk_ids: ["travel_policy_v2_2026.pdf"]
+  should_abstain: false
+
+- id: Q11
+  category: ambiguous
+  question: "Can I work remotely every Friday without prior approval?"
+  expected_answer: "The policy states that remote work on ad-hoc days is subject to manager discretion and operational requirements. Clarification is required."
+  expected_keywords: ["manager discretion", "operational requirements"]
+  expected_chunk_ids: ["remote_work_guidelines.pdf"]
   should_abstain: true
+
+- id: Q12
+  category: directly_answerable
+  question: "Summarize Surya's work experience at HiDevs, including what he built and the measurable impact."
+  expected_answer: "Surya worked as a Generative AI Developer Intern at HiDevs from Nov 2025 to May 2026. He built PeopleGPT/Aura talent-search system over 13,000+ profiles (70% search time reduction), optimized Dave Chatbot latency from 10-15s to 2.5s, and built AI GitHub Repository Analyzer (40% code review time reduction)."
+  expected_keywords: ["Generative AI Developer Intern", "Nov 2025", "HiDevs", "PeopleGPT", "70%", "Dave", "2.5", "GitHub", "40%"]
+  expected_chunk_ids: ["G_Surya_Resume.pdf"]
+  should_abstain: false

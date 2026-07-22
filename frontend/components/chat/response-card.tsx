@@ -152,7 +152,11 @@ export function ResponseCard({
             </span>
             <span>•</span>
             <span className="font-mono text-[11px] uppercase">
-              Score: {(response.confidence_score * 100).toFixed(0)}%
+              Score: {
+                response.confidence_score !== undefined && response.confidence_score !== null && !isNaN(response.confidence_score) && isFinite(response.confidence_score)
+                  ? `${Math.min(100, Math.max(0, Math.round(response.confidence_score * 100)))}%`
+                  : "Unavailable"
+              }
             </span>
           </div>
         </div>

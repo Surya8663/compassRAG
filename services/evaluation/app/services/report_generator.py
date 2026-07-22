@@ -95,24 +95,21 @@ class EvaluationRunnerService:
 
     def _filter_chunks_for_question(self, question: GoldenQuestion) -> list[DocumentChunk]:
         """
-        Simple keyword/id match across local corpus chunks to simulate candidate retrieval
-        when external Qdrant/ES vector stores are not running.
+        Retrieves candidate corpus chunks using text term matching without using expected_chunk_ids.
         """
-        if question.expected_chunk_ids:
-            matched = [
-                c for c in self.corpus_chunks
-                if any(eid in c.id or eid in c.document_id for eid in question.expected_chunk_ids)
-            ]
-            if matched:
-                return matched
+        stop_words = {"what", "is", "the", "amount", "for", "in", "on", "of", "and", "or", "to", "a", "an", "does", "do", "can", "i"}
+        tokens = [w.lower().strip("?,.") for w in question.question.split() if w.lower().strip("?,.") not in stop_words and len(w) > 2]
 
-        query_words = [w.lower() for w in question.question.split() if len(w) > 3]
-        matched_kw = []
+        scored_chunks: list[tuple[float, DocumentChunk]] = []
         for c in self.corpus_chunks:
-            if any(w in c.content.lower() for w in query_words):
-                matched_kw.append(c)
+            c_text = c.content.lower()
+            matches = sum(1 for t in tokens if t in c_text)
+            if matches > 0:
+                scored_chunks.append((float(matches), c))
 
-        return matched_kw or self.corpus_chunks[:3]
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        results = [chunk for _, chunk in scored_chunks[:10]]
+        return results if results else self.corpus_chunks[:3]
 
     def _invoke_graph(self, graph: Any, initial_state: dict[str, Any]) -> dict[str, Any]:
         """Safely invoke the async correction graph synchronously."""
@@ -145,6 +142,8 @@ class EvaluationRunnerService:
             self.corpus_chunks = load_corpus_as_chunks()
 
         for q in questions:
+            # Add rate-limiting pause between benchmark questions
+            time.sleep(2.0)
             # 1. Run Baseline RAG Pipeline
             candidate_chunks = self._filter_chunks_for_question(q)
             base_out = self.baseline_pipeline.run(
@@ -335,11 +334,17 @@ class EvaluationRunnerService:
         Returns paths (`json_path`, `md_path`).
         """
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        root_dir = Path.cwd()
         json_path = REPORTS_DIR / "evaluation_comparison_report.json"
         md_path = REPORTS_DIR / "evaluation_comparison_report.md"
+        root_json_path = root_dir / "evaluation_results.json"
+        root_md_path = root_dir / "evaluation_report.md"
 
+        json_str = report.model_dump_json(indent=2)
         with open(json_path, "w", encoding="utf-8") as f:
-            f.write(report.model_dump_json(indent=2))
+            f.write(json_str)
+        with open(root_json_path, "w", encoding="utf-8") as f:
+            f.write(json_str)
 
         lat_diff = (
             report.corrected_avg_latency_seconds
@@ -412,8 +417,11 @@ class EvaluationRunnerService:
                 f"`{c_res.hallucination_rate:.1%}` |"
             )
 
+        md_content = "\n".join(md_lines)
         with open(md_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(md_lines))
+            f.write(md_content)
+        with open(root_md_path, "w", encoding="utf-8") as f:
+            f.write(md_content)
 
-        logger.info("Evaluation reports exported to %s and %s", json_path, md_path)
-        return json_path, md_path
+        logger.info("Evaluation reports exported to %s and %s", root_json_path, root_md_path)
+        return root_json_path, root_md_path

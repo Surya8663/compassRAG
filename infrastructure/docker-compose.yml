@@ -270,8 +270,8 @@ services:
   # ============================================================================
   frontend:
     build:
-      context: ..
-      dockerfile: frontend/Dockerfile
+      context: ../frontend
+      dockerfile: Dockerfile
     container_name: compass_frontend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000/v1

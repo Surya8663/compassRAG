@@ -56,6 +56,10 @@ class DocumentMetadata(BaseModel):
     )
     tenant_id: str = Field(..., description="Tenant organization identifier")
     version_id: str = Field(..., description="Document version identifier")
+    section_name: str | None = Field(default=None, description="Section heading name (e.g. Experience, Education)")
+    organization: str | None = Field(default=None, description="Organization or company name")
+    role: str | None = Field(default=None, description="Job title or role name")
+    date_range: str | None = Field(default=None, description="Date range string for role or section")
 
 
 class Document(BaseModel):

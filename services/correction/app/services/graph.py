@@ -38,12 +38,12 @@ _tracer = get_tracer(__name__)
 async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
     """Node 1: Retrieves candidate chunks for `state['query']`."""
     settings = get_settings()
+    attempts = state.get("attempt_count", 0)
+    query = state.get("query", "")
+    tenant_id = resolve_tenant_id(explicit_tenant_id=state.get("tenant_id"))
 
-    # If state already has candidate chunks (e.g., passed from API payload on attempt 0),
-    # use them directly before any query reformulation attempts
-    if (state.get("attempt_count", 0) == 0 and state.get("retrieved_chunks")) or (
-        state.get("retrieved_chunks") == [] and state.get("retrieval_status") == ConfidenceStatus.LOW_CONFIDENCE
-    ):
+    # Only use pre-populated candidate chunks on attempt 0 if explicitly passed in initial_state
+    if attempts == 0 and state.get("retrieved_chunks") and not state.get("force_retransmit"):
         results = state["retrieved_chunks"]
         evaluator = get_retrieval_evaluator()
         avg_score, _, status, _ = evaluator.evaluate_confidence(
@@ -55,32 +55,17 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
             "retrieval_status": status,
         }
 
+    # For attempts > 0 (or when no chunks pre-provided), ALWAYS run a genuinely new retrieval using the reformulated query
     retriever = get_hybrid_retriever()
-    query = state.get("query", "")
-    tenant_id = resolve_tenant_id(explicit_tenant_id=state.get("tenant_id"))
-
     try:
         results, avg_score, status, _ = await retriever.retrieve(
             query=query, tenant_id=tenant_id, top_k=settings.RETRIEVAL_TOP_K
         )
-        if not results and state.get("retrieved_chunks"):
-            logger.info(
-                "External retrieval returned 0 chunks for query; keeping existing candidate chunks."
-            )
-            results = state["retrieved_chunks"]
-            evaluator = get_retrieval_evaluator()
-            avg_score, _, status, _ = evaluator.evaluate_confidence(
-                results=results, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
-            )
     except Exception as exc:
-        logger.warning(
-            "Retriever failed during graph traversal (`%s`); using existing chunks.", exc
-        )
-        results = state.get("retrieved_chunks", [])
-        evaluator = get_retrieval_evaluator()
-        avg_score, _, status, _ = evaluator.evaluate_confidence(
-            results=results, threshold=settings.RETRIEVAL_CONFIDENCE_THRESHOLD
-        )
+        logger.warning("Retriever failed during graph traversal (`%s`); returning empty result list.", exc)
+        results = []
+        avg_score = 0.0
+        status = ConfidenceStatus.LOW_CONFIDENCE
 
     return {
         "retrieved_chunks": results,
@@ -198,6 +183,7 @@ def groundedness_check_node(state: CorrectionGraphState) -> dict[str, Any]:
     """Node 5: Decomposes draft answer into atomic claims and computes groundedness score."""
     checker = get_groundedness_checker()
     draft = state.get("draft_answer", "")
+    query = state.get("query", "")
     chunks = state.get("retrieved_chunks", [])
     existing_verdicts = state.get("verdicts", [])
 
@@ -207,7 +193,7 @@ def groundedness_check_node(state: CorrectionGraphState) -> dict[str, Any]:
         {"draft_length": len(draft), "chunk_count": len(chunks)},
     ) as span:
         t0 = time.perf_counter()
-        score, is_grounded, verdicts, summary = checker.verify_groundedness(draft, chunks)
+        score, is_grounded, verdicts, summary = checker.verify_groundedness(draft, chunks, query=query)
         span.set_attribute("groundedness_score", score)
         span.set_attribute("is_grounded", is_grounded)
         PIPELINE_STAGE_DURATION.labels(

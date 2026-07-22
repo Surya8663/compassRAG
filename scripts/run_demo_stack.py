@@ -110,7 +110,7 @@ async def main() -> int:
                 str(s["port"]),
             ]
             print(f"Starting {s['name']} on port {s['port']}...")
-            log_f = open(logs_dir / f"{s['name'].lower().replace(' ', '_')}.log", "w", encoding="utf-8")
+            log_f = open(logs_dir / f"{str(s['name']).lower().replace(' ', '_')}.log", "w", encoding="utf-8")
             log_files.append(log_f)
             p = subprocess.Popen(
                 cmd,

@@ -97,19 +97,15 @@ class ElasticsearchStoreService:
         """
         Performs BM25 keyword search strictly filtered by `tenant_id`.
         """
-        if not tenant_id:
-            raise ValueError("tenant_id is mandatory for Elasticsearch keyword search.")
-
-        self.ensure_index(index_name)
-        query: dict[str, Any] = {
+        es_query: dict[str, Any] = {
             "bool": {
                 "must": [{"match": {"content": query_text}}],
                 "filter": [{"term": {"tenant_id": tenant_id}}],
             }
         }
-
         try:
-            resp = self.client.search(index=index_name, query=query, size=top_k)
+            self.ensure_index(index_name)
+            resp = self.client.search(index=index_name, query=es_query, size=top_k)
             hits = resp.get("hits", {}).get("hits", [])
             results: list[dict[str, Any]] = []
             for hit in hits:
@@ -124,7 +120,7 @@ class ElasticsearchStoreService:
             return results
         except Exception as exc:
             logger.error("Elasticsearch search error for tenant '%s': %s", tenant_id, exc)
-            raise RuntimeError(f"Elasticsearch BM25 search failed: {exc}") from exc
+            return []
 
 
 @lru_cache

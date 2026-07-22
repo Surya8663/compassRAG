@@ -20,15 +20,15 @@ def test_presidio_pii_redaction_real_entities() -> None:
 
     redacted = pii_service.redact_text(raw_text)
 
-    # Assert raw sensitive information is completely eliminated
-    assert "Jane Smith" not in redacted
+    # Assert email, phone, SSN, and credit card are redacted
     assert "jane.smith@example.com" not in redacted
     assert "415-555-1234" not in redacted
     assert "999-01-1234" not in redacted
     assert "4532-0151-1283-0366" not in redacted
+    # Person name is preserved per Requirement #6
+    assert "Jane Smith" in redacted
 
     # Assert Presidio entity replacement tags are present
-    assert "<PERSON>" in redacted
     assert "<EMAIL_ADDRESS>" in redacted
     assert "<PHONE_NUMBER>" in redacted
     assert "<US_SSN>" in redacted

@@ -9,10 +9,11 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Formats a duration in milliseconds or seconds cleanly.
+ * Formats a duration in milliseconds or seconds cleanly with NaN and Infinity protection.
  */
-export function formatDuration(ms?: number): string {
-  if (ms === undefined || ms === null || isNaN(ms)) return "0ms";
+export function formatDuration(ms?: number | null): string {
+  if (ms === undefined || ms === null || isNaN(ms) || !isFinite(ms)) return "Unavailable";
+  if (ms < 0) return "0ms";
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
 }

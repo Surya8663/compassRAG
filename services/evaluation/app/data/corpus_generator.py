@@ -138,9 +138,27 @@ def generate_golden_corpus() -> list[Path]:
         "vary by department, project phase, and team sprint schedule.",
         fontsize=12,
     )
-    doc_remote.save(remote_path)
-    doc_remote.close()
-    generated_paths.append(remote_path)
+    # 6. G_Surya_Resume.pdf (Surya Resume)
+    resume_path = CORPUS_DIR / "G_Surya_Resume.pdf"
+    doc_resume = fitz.open()
+    p_resume = doc_resume.new_page()
+    p_resume.insert_text(
+        (50, 70),
+        "G. Surya\n"
+        "Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com\n\n"
+        "Summary\n"
+        "Generative AI Engineer building RAG systems and agentic workflows.\n\n"
+        "Experience\n"
+        "Generative AI Developer Intern Nov 2025 – May 2026\n"
+        "HiDevs Bangalore, India (Hybrid)\n"
+        "– Built PeopleGPT / Aura AI Agent – RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, FastAPI (SSE); cut manual search time by 70%.\n"
+        "– Optimized Dave Chatbot latency from 10–15s to ~2.5s via code review; added streaming and MongoDB session persistence.\n"
+        "– Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase review time by 40%.\n",
+        fontsize=11,
+    )
+    doc_resume.save(resume_path)
+    doc_resume.close()
+    generated_paths.append(resume_path)
 
     return generated_paths
 

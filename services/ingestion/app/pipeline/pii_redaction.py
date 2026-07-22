@@ -21,7 +21,6 @@ class PIIRedactionService:
     """
 
     DEFAULT_ENTITIES: ClassVar[list[str]] = [
-        "PERSON",
         "US_SSN",
         "EMAIL_ADDRESS",
         "PHONE_NUMBER",
