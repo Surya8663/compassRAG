@@ -76,6 +76,7 @@ class EmbeddingService:
             if cached is not None:
                 logger.debug("Redis cache hit for %s", cache_key)
                 vector: list[float] = json.loads(cached)
+                logger.info("Embedded text (first 5 dims, cache hit): %s (input preview: '%s')", [round(v, 4) for v in vector[:5]], content[:40].replace('\n', ' '))
                 return vector
         except Exception as exc:
             logger.warning("Redis read error (%s): %s", cache_key, exc)
@@ -88,6 +89,7 @@ class EmbeddingService:
         except Exception as exc:
             logger.warning("Redis write error (%s): %s", cache_key, exc)
 
+        logger.info("Embedded text (first 5 dims): %s (input preview: '%s')", [round(v, 4) for v in vector[:5]], content[:40].replace('\n', ' '))
         return vector
 
     def embed_batch(self, contents: list[str]) -> list[list[float]]:

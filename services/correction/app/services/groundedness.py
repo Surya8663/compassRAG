@@ -47,27 +47,38 @@ class GroundednessCheckerService:
         if not clean_text:
             return []
 
+        if not self._openai_client:
+            from shared.utils.llm_client import get_llm_client
+            self._openai_client = get_llm_client(self.settings, timeout=10.0)
+
         if self._openai_client:
-            try:
-                prompt = (
-                    "Decompose the following text into a list of independent, atomic "
-                    "factual claims. Each claim should contain exactly one factual assertion.\n\n"
-                    f"Text:\n{clean_text}\n\n"
-                    "Respond with JSON strictly formatted as:\n"
-                    '{"claims": ["claim 1", "claim 2", ...]}'
-                )
-                response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"},
-                    temperature=0.0,
-                )
-                data = json.loads(response.choices[0].message.content or "{}")
-                claims = data.get("claims", [])
-                if isinstance(claims, list) and all(isinstance(c, str) for c in claims):
-                    return [c.strip() for c in claims if c.strip()]
-            except Exception as exc:
-                logger.warning("OpenAI claim decomposition failed (`%s`). Using local NLP.", exc)
+            for attempt in range(3):
+                try:
+                    prompt = (
+                        "Decompose the following text into a list of independent, atomic "
+                        "factual claims. Each claim should contain exactly one factual assertion.\n\n"
+                        f"Text:\n{clean_text}\n\n"
+                        "Respond with JSON strictly formatted as:\n"
+                        '{"claims": ["claim 1", "claim 2", ...]}'
+                    )
+                    response = self._openai_client.chat.completions.create(
+                        model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        temperature=0.0,
+                    )
+                    data = json.loads(response.choices[0].message.content or "{}")
+                    claims = data.get("claims", [])
+                    if isinstance(claims, list) and all(isinstance(c, str) for c in claims):
+                        return [c.strip() for c in claims if c.strip()]
+                    break
+                except Exception as exc:
+                    if attempt < 2 and ("429" in str(exc) or "RateLimit" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                        import time
+                        time.sleep((attempt + 1) * 3.0)
+                    else:
+                        logger.warning("OpenAI claim decomposition failed (`%s`). Using local NLP.", exc)
+                        break
 
         if self._nlp:
             try:
@@ -94,44 +105,44 @@ class GroundednessCheckerService:
         if not context_text.strip():
             return False, "Context text is empty."
 
+        if not self._openai_client:
+            from shared.utils.llm_client import get_llm_client
+            self._openai_client = get_llm_client(self.settings, timeout=10.0)
+
         if self._openai_client:
-            try:
-                prompt = (
-                    "Determine if the following atomic claim is strictly grounded and entailed "
-                    "by the provided reference context.\n\n"
-                    f"Context:\n{context_text}\n\n"
-                    f"Claim:\n{claim}\n\n"
-                    "Respond with JSON strictly formatted as:\n"
-                    '{"is_entailed": boolean, "reason": "explanation string"}'
-                )
-                response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"},
-                    temperature=0.0,
-                )
-                data = json.loads(response.choices[0].message.content or "{}")
-                is_ent = bool(data.get("is_entailed", False))
-                reason = str(data.get("reason", f"OpenAI evaluated entailment as {is_ent}."))
-                return is_ent, reason
-            except Exception as exc:
-                logger.warning("OpenAI entailment evaluation error: %s. Using local NLI.", exc)
+            for attempt in range(3):
+                try:
+                    prompt = (
+                        "Determine if the following atomic claim is strictly grounded and entailed "
+                        "by the provided reference context.\n\n"
+                        f"Context:\n{context_text}\n\n"
+                        f"Claim:\n{claim}\n\n"
+                        "Respond with JSON strictly formatted as:\n"
+                        '{"is_entailed": boolean, "reason": "explanation string"}'
+                    )
+                    response = self._openai_client.chat.completions.create(
+                        model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        temperature=0.0,
+                    )
+                    data = json.loads(response.choices[0].message.content or "{}")
+                    is_ent = bool(data.get("is_entailed", False))
+                    reason = str(data.get("reason", f"OpenAI evaluated entailment as {is_ent}."))
+                    return is_ent, reason
+                except Exception as exc:
+                    if attempt < 2 and ("429" in str(exc) or "RateLimit" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                        import time
+                        time.sleep((attempt + 1) * 3.0)
+                    else:
+                        logger.warning("OpenAI entailment evaluation error: %s. Using local NLI.", exc)
+                        break
 
         detector = get_contradiction_detector()
         verdict, conf, exp = detector._evaluate_pair_nli(context_text, claim)
         if verdict == "ENTAILMENT":
             return True, f"Local NLI verified claim entailment ({conf:.2f})."
-        elif verdict == "CONTRADICTION":
-            return False, f"Local NLI detected contradiction ({conf:.2f})."
-
-        # Heuristic inclusion fallback
-        norm_claim = re.sub(r"[^a-z0-9\s]", "", claim.lower()).strip()
-        norm_context = re.sub(r"[^a-z0-9\s]", "", context_text.lower())
-        if norm_claim in norm_context or all(
-            w in norm_context for w in norm_claim.split() if len(w) > 4
-        ):
-            return True, "Heuristic check verified keyword and phrase inclusion in context."
-        return False, f"Claim not adequately supported by context (`{verdict}`: {exp})."
+        return False, f"Claim not supported by context (`{verdict}`: {exp})."
 
     def verify_groundedness(
         self, draft_answer: str, chunks: list[RetrievalResult]

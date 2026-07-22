@@ -77,6 +77,22 @@ class FallbackSynthesizerService:
                 )
                 user_prompt = f"Reference Context:\n{context_str}\n\nUser Query: {query}"
 
+        if not self._openai_client:
+            from shared.utils.llm_client import get_llm_client
+            self._openai_client = get_llm_client(self.settings, timeout=10.0)
+
+        if not self._openai_client:
+            raise RuntimeError("LLM API client is not configured (`_openai_client` is None) in FallbackSynthesizerService.")
+
+        response = None
+        for attempt in range(3):
+            try:
+                logger.info(
+                    "Invoking fallback LLM API (model: '%s') for query: '%s' (attempt %d)",
+                    self.model_name,
+                    query,
+                    attempt + 1,
+                )
                 response = self._openai_client.chat.completions.create(
                     model=self.model_name,
                     messages=[
@@ -86,60 +102,58 @@ class FallbackSynthesizerService:
                     response_format={"type": "json_object"},
                     temperature=0.1,
                 )
-
-                content = response.choices[0].message.content or "{}"
-                data = json.loads(content)
-                base_answer = str(data.get("answer", "")).strip() or chunks[0].content
-                raw_claims = data.get("claims", [])
-
-                citations: list[Citation] = []
-                for item in raw_claims:
-                    if not isinstance(item, dict):
-                        continue
-                    cid = str(item.get("chunk_id", "")).strip()
-                    snippet = str(item.get("quote_snippet", "")).strip()
-                    target_chunk = chunk_map.get(cid) or chunks[0]
-                    citations.append(
-                        Citation(
-                            chunk_id=target_chunk.id,
-                            document_id=target_chunk.document_id,
-                            source=target_chunk.metadata.source,
-                            page_number=target_chunk.metadata.page_number,
-                            quote_snippet=snippet or target_chunk.content[:100],
-                        )
-                    )
-
-                if not citations and chunks:
-                    top_c = chunks[0]
-                    citations.append(
-                        Citation(
-                            chunk_id=top_c.id,
-                            document_id=top_c.document_id,
-                            source=top_c.metadata.source,
-                            page_number=top_c.metadata.page_number,
-                            quote_snippet=top_c.content[:100],
-                        )
-                    )
-
-                full_answer = f"{base_answer}{FALLBACK_DISCLAIMER}"
-                return full_answer, citations
-
+                break
             except Exception as exc:
-                logger.warning(
-                    "OpenAI fallback generation failed (`%s`). Using local fallback.", exc
-                )
+                if attempt < 2 and ("429" in str(exc) or "RateLimit" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                    sleep_time = (attempt + 1) * 3.0
+                    logger.warning("Fallback LLM rate limit hit (%s). Retrying in %.1fs...", exc, sleep_time)
+                    import time
+                    time.sleep(sleep_time)
+                else:
+                    logger.error("Fallback LLM synthesis failed (`%s`).", exc)
+                    raise RuntimeError(f"Fallback LLM synthesis failed: {exc}") from exc
 
-        logger.info("Using local fallback synthesis.")
-        top_chunk = chunks[0]
-        base_answer = f"Synthesized from {top_chunk.metadata.source}: {top_chunk.content}"
-        citations = [
-            Citation(
-                chunk_id=top_chunk.id,
-                document_id=top_chunk.document_id,
-                source=top_chunk.metadata.source,
-                page_number=top_chunk.metadata.page_number,
-                quote_snippet=top_chunk.content[:100],
+        if not response or not response.choices:
+            raise RuntimeError("Fallback LLM API returned an empty response.")
+
+        content = response.choices[0].message.content or "{}"
+        logger.info("Fallback LLM response received successfully. Raw content: %s", content)
+
+        data = json.loads(content)
+        base_answer = str(data.get("answer", "")).strip()
+        raw_claims = data.get("claims", [])
+
+        citations: list[Citation] = []
+        for item in raw_claims:
+            if not isinstance(item, dict):
+                continue
+            cid = str(item.get("chunk_id", "")).strip()
+            snippet = str(item.get("quote_snippet", "")).strip()
+            target_chunk = chunk_map.get(cid) or chunks[0]
+            citations.append(
+                Citation(
+                    chunk_id=target_chunk.id,
+                    document_id=target_chunk.document_id,
+                    source=target_chunk.metadata.source,
+                    page_number=target_chunk.metadata.page_number,
+                    quote_snippet=snippet or target_chunk.content[:100],
+                )
             )
-        ]
+
+        if not citations and chunks:
+            top_c = chunks[0]
+            citations.append(
+                Citation(
+                    chunk_id=top_c.id,
+                    document_id=top_c.document_id,
+                    source=top_c.metadata.source,
+                    page_number=top_c.metadata.page_number,
+                    quote_snippet=top_c.content[:100],
+                )
+            )
+
+        if not base_answer:
+            raise RuntimeError("Fallback LLM synthesized answer is empty.")
+
         full_answer = f"{base_answer}{FALLBACK_DISCLAIMER}"
         return full_answer, citations
