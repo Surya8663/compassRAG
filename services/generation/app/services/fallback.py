@@ -46,36 +46,34 @@ class FallbackSynthesizerService:
 
         chunk_map: dict[str, DocumentChunk] = {c.id: c for c in chunks}
 
-        if self._openai_client:
-            try:
-                context_blocks = []
-                for c in chunks:
-                    block = (
-                        f"Chunk ID: {c.id}\n"
-                        f"Document ID: {c.document_id}\n"
-                        f"Source: {c.metadata.source} (Page {c.metadata.page_number})\n"
-                        f"Content:\n{c.content}\n"
-                    )
-                    context_blocks.append(block)
-                context_str = "\n---\n".join(context_blocks)
+        context_blocks = []
+        for c in chunks:
+            block = (
+                f"Chunk ID: {c.id}\n"
+                f"Document ID: {c.document_id}\n"
+                f"Source: {c.metadata.source} (Page {c.metadata.page_number})\n"
+                f"Content:\n{c.content}\n"
+            )
+            context_blocks.append(block)
+        context_str = "\n---\n".join(context_blocks)
 
-                system_prompt = (
-                    "You are a fallback RAG generation assistant. Answer the query using "
-                    "the reference chunks provided. Note: Reference chunks may contain PII redaction placeholders "
-                    "like <PERSON>, <EMAIL_ADDRESS>, etc. Treat them naturally or work around them without exposing "
-                    "raw redaction tags where avoidable. Output structured JSON matching:\n"
-                    "{\n"
-                    '  "answer": "Synthesized fallback answer...",\n'
-                    '  "claims": [\n'
-                    "    {\n"
-                    '      "claim_text": "Assertion",\n'
-                    '      "chunk_id": "Supporting Chunk ID",\n'
-                    '      "quote_snippet": "Quote excerpt"\n'
-                    "    }\n"
-                    "  ]\n"
-                    "}"
-                )
-                user_prompt = f"Reference Context:\n{context_str}\n\nUser Query: {query}"
+        system_prompt = (
+            "You are a fallback RAG generation assistant. Answer the query using "
+            "the reference chunks provided. Note: Reference chunks may contain PII redaction placeholders "
+            "like <PERSON>, <EMAIL_ADDRESS>, etc. Treat them naturally or work around them without exposing "
+            "raw redaction tags where avoidable. Output structured JSON matching:\n"
+            "{\n"
+            '  "answer": "Synthesized fallback answer...",\n'
+            '  "claims": [\n'
+            "    {\n"
+            '      "claim_text": "Assertion",\n'
+            '      "chunk_id": "Supporting Chunk ID",\n'
+            '      "quote_snippet": "Quote excerpt"\n'
+            "    }\n"
+            "  ]\n"
+            "}"
+        )
+        user_prompt = f"Reference Context:\n{context_str}\n\nUser Query: {query}"
 
         if not self._openai_client:
             from shared.utils.llm_client import get_llm_client

@@ -149,52 +149,44 @@ def generate_draft_node(state: CorrectionGraphState) -> dict[str, Any]:
             "draft_citations": [],
         }
 
-    # Convert retrieved chunks to clean DocumentChunk objects for synthesis
+    # Convert retrieved chunks to clean DocumentChunk objects using Pydantic model_validate.
+    # Every chunk MUST convert successfully — no silent skipping, no fallbacks.
     doc_chunks: list[DocumentChunk] = []
-    for item in chunks:
-        if hasattr(item, "chunk") and isinstance(getattr(item, "chunk"), DocumentChunk):
-            doc_chunks.append(item.chunk)
-        elif isinstance(item, DocumentChunk):
-            doc_chunks.append(item)
-        elif isinstance(item, dict):
-            c_dict = item.get("chunk", item) if isinstance(item.get("chunk"), dict) else item
-            try:
-                if isinstance(c_dict, DocumentChunk):
-                    doc_chunks.append(c_dict)
+    for idx, item in enumerate(chunks):
+        try:
+            # Case 1: RetrievalResult object (has .chunk attribute that is a DocumentChunk)
+            if hasattr(item, "chunk"):
+                chunk_data = item.chunk
+                if isinstance(chunk_data, DocumentChunk):
+                    doc_chunks.append(chunk_data)
+                elif isinstance(chunk_data, dict):
+                    doc_chunks.append(DocumentChunk.model_validate(chunk_data))
                 else:
-                    doc_chunks.append(DocumentChunk.model_validate(c_dict))
-            except Exception as exc:
-                logger.debug("Could not validate DocumentChunk from dict: %s", exc)
-        else:
-            c = getattr(item, "chunk", item)
-            if isinstance(c, DocumentChunk):
-                doc_chunks.append(c)
+                    doc_chunks.append(DocumentChunk.model_validate(chunk_data))
+            # Case 2: Already a DocumentChunk
+            elif isinstance(item, DocumentChunk):
+                doc_chunks.append(item)
+            # Case 3: Raw dict
+            elif isinstance(item, dict):
+                chunk_dict = item.get("chunk", item) if isinstance(item.get("chunk"), dict) else item
+                doc_chunks.append(DocumentChunk.model_validate(chunk_dict))
+            else:
+                raise TypeError(f"Unexpected chunk type at index {idx}: {type(item).__name__}")
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to convert chunk at index {idx} to DocumentChunk "
+                f"(type={type(item).__name__}): {exc}"
+            ) from exc
 
-    if not doc_chunks and chunks:
-        # Fallback if no clean DocumentChunk objects could be extracted
-        top_c = chunks[0].chunk if hasattr(chunks[0], "chunk") else chunks[0]
-        content_str = getattr(top_c, "content", "") if not isinstance(top_c, dict) else str(top_c.get("content", ""))
-        cid = getattr(top_c, "id", "chk_0") if not isinstance(top_c, dict) else str(top_c.get("id", "chk_0"))
-        did = getattr(top_c, "document_id", "doc_0") if not isinstance(top_c, dict) else str(top_c.get("document_id", "doc_0"))
-        meta = getattr(top_c, "metadata", None) if not isinstance(top_c, dict) else top_c.get("metadata")
-        src = getattr(meta, "source", "unknown") if meta and not isinstance(meta, dict) else (meta.get("source", "unknown") if isinstance(meta, dict) else "unknown")
-        pnum = getattr(meta, "page_number", 1) if meta and not isinstance(meta, dict) else (meta.get("page_number", 1) if isinstance(meta, dict) else 1)
-        return {
-            "draft_answer": content_str,
-            "draft_citations": [
-                Citation(
-                    chunk_id=cid,
-                    document_id=did,
-                    source=src,
-                    page_number=pnum,
-                    quote_snippet=content_str[:100],
-                )
-            ],
-        }
+    if not doc_chunks:
+        raise RuntimeError(
+            f"doc_chunks is empty after processing {len(chunks)} input chunks. "
+            f"This should never happen — every chunk must be convertible to DocumentChunk."
+        )
 
     from services.generation.app.services.synthesis import FlagshipSynthesizerService
     synthesizer = FlagshipSynthesizerService()
-    logger.debug("Generating draft answer using FlagshipSynthesizerService for query: '%s'", query)
+    logger.info(f"Calling FlagshipSynthesizerService with {len(doc_chunks)} chunks for query: {query}")
     answer, citations = synthesizer.synthesize(query, doc_chunks)
     return {
         "draft_answer": answer,
