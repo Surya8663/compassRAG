@@ -104,7 +104,14 @@ class ElasticsearchStoreService:
             }
         }
         try:
-            self.ensure_index(index_name)
+            if not self.client.indices.exists(index=index_name):
+                logger.warning(
+                    "Elasticsearch index '%s' does not exist during query for tenant '%s'. "
+                    "Index creation occurs strictly during ingestion or setup.",
+                    index_name,
+                    tenant_id,
+                )
+                return []
             resp = self.client.search(index=index_name, query=es_query, size=top_k)
             hits = resp.get("hits", {}).get("hits", [])
             results: list[dict[str, Any]] = []

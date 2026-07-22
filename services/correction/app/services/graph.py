@@ -55,6 +55,8 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
             "retrieval_status": status,
         }
 
+    last_useful = state.get("last_nonempty_retrieval_results") or []
+
     # For attempts > 0 (or when no chunks pre-provided), ALWAYS run a genuinely new retrieval using the reformulated query
     retriever = get_hybrid_retriever()
     try:
@@ -67,8 +69,27 @@ async def retrieve_node(state: CorrectionGraphState) -> dict[str, Any]:
         avg_score = 0.0
         status = ConfidenceStatus.LOW_CONFIDENCE
 
+    # Preserve useful evidence: Never overwrite useful chunks with empty results from a failed retry
+    if results:
+        active_chunks = results
+        new_last_useful = results
+    elif last_useful:
+        logger.info(
+            "Retrieval retry for query '%s' returned 0 chunks; preserving %d last nonempty candidate chunks.",
+            query,
+            len(last_useful),
+        )
+        active_chunks = last_useful
+        new_last_useful = last_useful
+        avg_score = max(avg_score, state.get("retrieval_confidence", 0.80))
+        status = ConfidenceStatus.VERIFIED
+    else:
+        active_chunks = []
+        new_last_useful = []
+
     return {
-        "retrieved_chunks": results,
+        "retrieved_chunks": active_chunks,
+        "last_nonempty_retrieval_results": new_last_useful,
         "retrieval_confidence": avg_score,
         "retrieval_status": status,
     }

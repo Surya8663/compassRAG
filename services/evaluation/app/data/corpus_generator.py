@@ -66,25 +66,45 @@ def generate_golden_corpus() -> list[Path]:
     doc_handbook.close()
     generated_paths.append(handbook_path)
 
-    # 2. reimbursement_receipt_scanned.pdf (OCR Dependent)
+    # 2. reimbursement_receipt_scanned.pdf (Image-only PDF for Tesseract OCR testing)
     receipt_path = CORPUS_DIR / "reimbursement_receipt_scanned.pdf"
-    doc_receipt = fitz.open()
-    p_receipt = doc_receipt.new_page()
-    p_receipt.insert_text(
-        (50, 70),
-        "OFFICIAL REIMBURSEMENT INVOICE / RECEIPT\n\n"
-        "VENDOR: Apex Catering Services Inc.\n"
-        "TAX ID: 99-8877665\n"
-        "DATE: 2026-03-15\n"
-        "DESCRIPTION: Client Dinner and Team Lunch\n"
-        "SUBTOTAL: $440.00\n"
-        "TAX: $45.50\n"
-        "TOTAL AMOUNT DUE: $485.50\n"
-        "STATUS: PAID BY CORPORATE CREDIT CARD",
-        fontsize=12,
-    )
-    doc_receipt.save(receipt_path)
-    doc_receipt.close()
+    try:
+        from PIL import Image, ImageDraw, ImageFilter
+        import io
+
+        img = Image.new("RGB", (600, 400), color=(255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        receipt_text = (
+            "OFFICIAL REIMBURSEMENT INVOICE / RECEIPT\n\n"
+            "VENDOR: Apex Catering Services Inc.\n"
+            "TAX ID: 99-8877665\n"
+            "DATE: 2026-03-15\n"
+            "DESCRIPTION: Client Dinner and Team Lunch\n"
+            "SUBTOTAL: $440.00\n"
+            "TAX: $45.50\n"
+            "TOTAL AMOUNT DUE: $485.50\n"
+            "STATUS: PAID BY CORPORATE CREDIT CARD"
+        )
+        draw.text((30, 30), receipt_text, fill=(0, 0, 0))
+        blurred_img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+
+        img_byte_arr = io.BytesIO()
+        blurred_img.save(img_byte_arr, format="PNG")
+        img_bytes = img_byte_arr.getvalue()
+
+        doc_receipt = fitz.open()
+        p_receipt = doc_receipt.new_page(width=600, height=400)
+        p_receipt.insert_image(fitz.Rect(0, 0, 600, 400), stream=img_bytes)
+        doc_receipt.save(receipt_path)
+        doc_receipt.close()
+    except Exception as exc:
+        # Fallback text insertion if PIL is unavailable
+        doc_receipt = fitz.open()
+        p_receipt = doc_receipt.new_page()
+        p_receipt.insert_text((50, 70), "OFFICIAL REIMBURSEMENT INVOICE TOTAL AMOUNT DUE: $485.50")
+        doc_receipt.save(receipt_path)
+        doc_receipt.close()
+
     generated_paths.append(receipt_path)
 
     # 3. travel_policy_v1_2024.pdf (Contradictory - Old Version)
@@ -138,6 +158,10 @@ def generate_golden_corpus() -> list[Path]:
         "vary by department, project phase, and team sprint schedule.",
         fontsize=12,
     )
+    doc_remote.save(remote_path)
+    doc_remote.close()
+    generated_paths.append(remote_path)
+
     # 6. G_Surya_Resume.pdf (Surya Resume)
     resume_path = CORPUS_DIR / "G_Surya_Resume.pdf"
     doc_resume = fitz.open()

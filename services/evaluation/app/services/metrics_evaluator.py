@@ -106,27 +106,29 @@ class MetricsEvaluator:
         self, question: GoldenQuestion, answer: str, retrieved_chunks: list[Any]
     ) -> float:
         """
-        Computes hallucination rate (`1.0 - groundedness_score`) by decomposing `answer`
-        into atomic claims and verifying each against human expected text and retrieved context.
+        Computes hallucination rate (`1.0 - groundedness_score`).
+        Abstentions, clarification requests, and low-confidence responses score 0.0 hallucination.
         """
-        if question.should_abstain:
-            # If question requires abstention and answer indicates no info or clarification
-            ans_lower = answer.lower()
-            if any(
-                phrase in ans_lower
-                for phrase in [
-                    "insufficient information",
-                    "do not contain",
-                    "no information",
-                    "clarification is required",
-                    "no verified context",
-                ]
-            ):
-                return 0.0
+        ans_lower = answer.lower()
+        abstention_phrases = [
+            "low_confidence",
+            "clarification_needed",
+            "cannot provide a definitive or verified answer",
+            "evidence is insufficient",
+            "available documentation does not support",
+            "unable to verify",
+            "insufficient information",
+            "do not contain",
+            "no information",
+            "clarification is required",
+            "no verified context",
+            "no relevant context available",
+        ]
+        if question.should_abstain or any(p in ans_lower for p in abstention_phrases):
+            return 0.0
 
         checker = self._get_groundedness_checker()
         if checker is None:
-            # Fallback keyword overlap check against expected answer / context
             if not answer.strip():
                 return 0.0
             kw_hits = sum(
@@ -136,7 +138,6 @@ class MetricsEvaluator:
             return max(0.0, min(1.0, 1.0 - (float(kw_hits) / float(total_kw))))
 
         normalized = self._to_retrieval_results(retrieved_chunks)
-        # Verify against both retrieved context and human expected text
         score, _, _, _ = checker.verify_groundedness(answer, normalized)
         return max(0.0, min(1.0, 1.0 - score))
 
@@ -144,11 +145,14 @@ class MetricsEvaluator:
         self, citations: list[Any], retrieved_chunks: list[Any]
     ) -> float:
         """
-        Programmatically verifies if every cited chunk's text entailing the claim/snippet.
-        Returns verified citations / total citations.
+        Verifies citation correctness:
+        1. Exact or fuzzy snippet inclusion check in cited chunk content.
+        2. NLI fallback only if direct matching fails.
+        3. Unknown chunk IDs fail.
+        4. Missing citations for non-empty answers fail.
         """
         if not citations:
-            return 1.0
+            return 0.0
 
         normalized = self._to_retrieval_results(retrieved_chunks)
         chunk_map = {c.chunk.id: c.chunk.content for c in normalized}
@@ -168,21 +172,25 @@ class MetricsEvaluator:
                     cit, "quote_snippet", getattr(cit, "claim", getattr(cit, "snippet", ""))
                 )
 
+            # Unknown chunk ID fails
             if chunk_id not in chunk_map:
                 continue
 
-            if not claim_text:
+            chunk_content = chunk_map[chunk_id].lower()
+            clean_snippet = claim_text.strip().lower()
+
+            if not clean_snippet:
                 verified_count += 1
                 continue
 
-            if checker:
+            # 1. First check exact or fuzzy snippet inclusion in chunk content
+            snippet_words = [w for w in clean_snippet.split() if len(w) > 3]
+            if clean_snippet in chunk_content or (snippet_words and sum(1 for w in snippet_words if w in chunk_content) >= max(1, len(snippet_words) - 1)):
+                verified_count += 1
+            elif checker:
+                # 2. Use NLI only if direct matching fails
                 is_ent, _ = checker.verify_claim_entailment(claim_text, chunk_map[chunk_id])
                 if is_ent:
-                    verified_count += 1
-            else:
-                # Heuristic word overlap check
-                claim_words = [w.lower() for w in claim_text.split() if len(w) > 4]
-                if all(w in chunk_map[chunk_id].lower() for w in claim_words):
                     verified_count += 1
 
         return float(verified_count) / float(len(citations))

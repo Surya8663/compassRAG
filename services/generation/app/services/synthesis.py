@@ -185,37 +185,75 @@ class FlagshipSynthesizerService:
         self, query: str, chunks: list[DocumentChunk], chunk_map: dict[str, DocumentChunk]
     ) -> tuple[str, list[Citation]]:
         """
-        Local grounded synthesis that constructs an authoritative answer directly from retrieved chunk evidence
-        when remote LLM APIs are unavailable or rate limited.
+        Local query-focused grounded synthesis that ranks candidate sentences against the query,
+        filters out contact info and irrelevant sections, suppresses PII placeholders, and attaches citations.
         """
-        lines_out: list[str] = []
-        citations: list[Citation] = []
+        import re
 
-        for idx, c in enumerate(chunks, start=1):
+        stop_words = {
+            "what", "is", "the", "a", "an", "of", "and", "or", "in", "to", "for", "with",
+            "on", "at", "by", "from", "he", "his", "surya", "s", "summarize", "work", "experience"
+        }
+        query_terms = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2 and w.lower() not in stop_words]
+
+        scored_sentences: list[tuple[float, str, DocumentChunk]] = []
+
+        for c in chunks:
             content = c.content.strip()
             if not content:
                 continue
 
-            # Synthesize clean summary lines from chunk content
-            c_lines = [l.strip() for l in content.split("\n") if l.strip()]
-            valid_bullets = [l for l in c_lines if len(l) > 10 and not l.lower() in ("experience", "summary", "education", "skills")]
+            # Split into lines/bullets
+            lines = [l.strip() for l in content.split("\n") if l.strip()]
+            for line in lines:
+                lower_line = line.lower()
 
-            if valid_bullets:
-                section_text = "\n".join(valid_bullets)
-                lines_out.append(f"{section_text} [{c.id}]")
-            else:
-                lines_out.append(f"{content} [{c.id}]")
+                # Filter contact headers, phone/email, and PII placeholders
+                if any(p in line for p in ("<PHONE_NUMBER>", "<EMAIL_ADDRESS>", "linkedin.com", "github.com", "t. john institute")):
+                    continue
+                if any(p in lower_line for p in ("email:", "phone:", "contact:", "address:")):
+                    continue
 
-            snippet = valid_bullets[0] if valid_bullets else content[:150]
-            citations.append(
-                Citation(
-                    chunk_id=c.id,
-                    document_id=c.document_id,
-                    source=c.metadata.source,
-                    page_number=c.metadata.page_number,
-                    quote_snippet=snippet,
+                # Calculate query overlap score
+                words = set(re.findall(r"\w+", lower_line))
+                score = sum(1.0 for term in query_terms if term in lower_line)
+
+                # Boost structured achievement bullets
+                if line.startswith("•") or line.startswith("-") or line.startswith("–"):
+                    score += 0.5
+
+                if len(line) > 15:
+                    scored_sentences.append((score, line, c))
+
+        # Sort by score descending
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+
+        # Select top relevant sentences (up to 7 to cover all key facets)
+        top_items = [s for s in scored_sentences if s[0] > 0][:7]
+        if not top_items and scored_sentences:
+            top_items = scored_sentences[:5]
+
+        lines_out: list[str] = []
+        citations: list[Citation] = []
+        used_chunk_ids: set[str] = set()
+
+        for _, line, c in top_items:
+            clean_line = re.sub(r"<PHONE_NUMBER>|<EMAIL_ADDRESS>", "", line).strip()
+            if not clean_line:
+                continue
+            lines_out.append(f"{clean_line} [{c.id}]")
+
+            if c.id not in used_chunk_ids:
+                used_chunk_ids.add(c.id)
+                citations.append(
+                    Citation(
+                        chunk_id=c.id,
+                        document_id=c.document_id,
+                        source=c.metadata.source,
+                        page_number=c.metadata.page_number,
+                        quote_snippet=clean_line[:150],
+                    )
                 )
-            )
 
-        answer_text = "\n\n".join(lines_out) if lines_out else "No verified context available."
+        answer_text = "\n".join(lines_out) if lines_out else "No relevant context available to answer the query."
         return answer_text, citations

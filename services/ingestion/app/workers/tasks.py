@@ -119,13 +119,34 @@ def process_document_page(
                         es_store = get_es_store()
                         embedder = get_embedding_service()
 
+                        indexing_errors: list[str] = []
                         for chunk in chunks:
                             vector = embedder.embed_text(chunk.content)
-                            q_store.upsert_chunk(chunk, vector)
-                            es_store.index_chunk(chunk)
+                            q_ok = q_store.upsert_chunk(chunk, vector)
+                            es_ok = es_store.index_chunk(chunk)
+
+                            if not q_ok:
+                                indexing_errors.append(f"Qdrant indexing failed for chunk {chunk.id}")
+                            if not es_ok:
+                                indexing_errors.append(f"Elasticsearch indexing failed for chunk {chunk.id}")
+
+                        if indexing_errors:
+                            page.status = "PARTIAL_FAILURE"
+                            page.error_message = "; ".join(indexing_errors)
+                            import logging
+                            logging.getLogger(__name__).error(
+                                "Indexing failed for document %s, page %d: %s",
+                                document_id,
+                                page_number,
+                                page.error_message,
+                            )
                     except Exception as index_exc:
+                        page.status = "PARTIAL_FAILURE"
+                        page.error_message = f"Indexing exception: {index_exc}"
                         import logging
-                        logging.getLogger(__name__).error("Failed to index chunks into Qdrant/Elasticsearch: %s", index_exc)
+                        logging.getLogger(__name__).error(
+                            "Failed to index chunks into Qdrant/Elasticsearch: %s", index_exc
+                        )
 
         except Exception as exc:
             page.status = "FAILED"
@@ -144,6 +165,11 @@ def process_document_page(
                 .filter(DocumentPage.batch_id == batch_id, DocumentPage.status == "FAILED")
                 .count()
             )
+            partial_count = (
+                session.query(DocumentPage)
+                .filter(DocumentPage.batch_id == batch_id, DocumentPage.status == "PARTIAL_FAILURE")
+                .count()
+            )
             review_count = (
                 session.query(DocumentPage)
                 .filter(DocumentPage.batch_id == batch_id, DocumentPage.status == "MANUAL_REVIEW")
@@ -152,6 +178,8 @@ def process_document_page(
 
             if failed_count > 0:
                 batch.status = "FAILED"
+            elif partial_count > 0:
+                batch.status = "PARTIAL_FAILURE"
             elif review_count > 0:
                 batch.status = "REQUIRES_REVIEW"
             else:

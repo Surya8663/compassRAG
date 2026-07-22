@@ -184,19 +184,12 @@ class EvaluationRunnerService:
 
             # 2. Run Self-Correcting RAG Pipeline (`CorrectionRouterGraph`)
             start_corr = time.perf_counter()
-            from shared.models.common import RetrievalResult
-            retrieved_results = [
-                RetrievalResult(
-                    chunk=c, vector_score=1.0, bm25_score=1.0, fused_score=1.0, rerank_score=1.0
-                )
-                for c in candidate_chunks
-            ]
             initial_state = {
                 "query": q.question,
                 "tenant_id": tenant_id,
                 "original_query": q.question,
                 "attempt_count": 0,
-                "retrieved_chunks": retrieved_results,
+                "retrieved_chunks": candidate_chunks,
                 "retrieval_confidence": 0.0,
                 "retrieval_status": ConfidenceStatus.VERIFIED,
                 "contradictions_detected": False,
@@ -204,8 +197,8 @@ class EvaluationRunnerService:
                 "has_same_date_contradiction": False,
                 "draft_answer": "",
                 "draft_citations": [],
-                "groundedness_score": 1.0,
-                "groundedness_verdict": True,
+                "groundedness_score": 0.0,
+                "groundedness_verdict": False,
                 "verdicts": [],
                 "final_answer": "",
                 "final_status": ConfidenceStatus.VERIFIED,
@@ -224,17 +217,16 @@ class EvaluationRunnerService:
                     else str(corr_status)
                 )
                 corr_chunks = [
-                    r.chunk
+                    r.chunk if hasattr(r, "chunk") else r
                     for r in corr_state.get("retrieved_chunks", [])
-                    if hasattr(r, "chunk")
                 ] or candidate_chunks
                 corr_citations = corr_state.get("draft_citations", [])
             except Exception as exc:
                 logger.warning("Correction graph run failed for %s: %s", q.id, exc)
-                corr_answer = base_answer
-                corr_status_str = base_status
-                corr_chunks = base_chunks
-                corr_citations = base_citations
+                corr_answer = "Error during correction graph execution."
+                corr_status_str = "LOW_CONFIDENCE"
+                corr_chunks = candidate_chunks
+                corr_citations = []
 
             corr_latency = time.perf_counter() - start_corr
 
@@ -261,72 +253,60 @@ class EvaluationRunnerService:
                     getattr(c, "chunk_id", str(c)) for c in corr_citations
                 ],
             )
-            results.append(corr_res)
-
-        # 3. Aggregate averages
-        base_runs = [r for r in results if r.pipeline_type == "baseline"]
-        corr_runs = [r for r in results if r.pipeline_type == "corrected"]
-
-        n = float(len(questions)) or 1.0
-        base_avg_halluc = sum(r.hallucination_rate for r in base_runs) / n
-        corr_avg_halluc = sum(r.hallucination_rate for r in corr_runs) / n
-        halluc_imp = (
-            ((base_avg_halluc - corr_avg_halluc) / max(0.0001, base_avg_halluc))
-            * 100.0
-            if base_avg_halluc > 0
-            else 0.0
-        )
-
-        base_avg_rec = sum(r.retrieval_recall for r in base_runs) / n
-        corr_avg_rec = sum(r.retrieval_recall for r in corr_runs) / n
-        rec_imp = (
-            ((corr_avg_rec - base_avg_rec) / max(0.0001, base_avg_rec)) * 100.0
-            if base_avg_rec > 0
-            else 0.0
-        )
-
-        base_avg_cit = sum(r.citation_correctness for r in base_runs) / n
-        corr_avg_cit = sum(r.citation_correctness for r in corr_runs) / n
-        cit_imp = (
-            ((corr_avg_cit - base_avg_cit) / max(0.0001, base_avg_cit)) * 100.0
-            if base_avg_cit > 0
-            else 0.0
-        )
-
-        base_avg_abs = sum(r.appropriate_abstention for r in base_runs) / n
-        corr_avg_abs = sum(r.appropriate_abstention for r in corr_runs) / n
-        abs_imp = (
-            ((corr_avg_abs - base_avg_abs) / max(0.0001, base_avg_abs)) * 100.0
-            if base_avg_abs > 0
-            else 0.0
-        )
-
-        base_avg_lat = sum(r.latency_seconds for r in base_runs) / n
-        corr_avg_lat = sum(r.latency_seconds for r in corr_runs) / n
-
-        report = EvaluationSummaryReport(
-            run_id=str(uuid.uuid4()),
-            timestamp=datetime.now(UTC).isoformat(),
-            total_questions=len(questions),
-            baseline_avg_hallucination_rate=round(base_avg_halluc, 4),
-            corrected_avg_hallucination_rate=round(corr_avg_halluc, 4),
-            hallucination_improvement_pct=round(halluc_imp, 2),
-            baseline_avg_retrieval_recall=round(base_avg_rec, 4),
-            corrected_avg_retrieval_recall=round(corr_avg_rec, 4),
-            retrieval_recall_improvement_pct=round(rec_imp, 2),
-            baseline_avg_citation_correctness=round(base_avg_cit, 4),
-            corrected_avg_citation_correctness=round(corr_avg_cit, 4),
-            citation_correctness_improvement_pct=round(cit_imp, 2),
-            baseline_appropriate_abstention_rate=round(base_avg_abs, 4),
-            corrected_appropriate_abstention_rate=round(corr_avg_abs, 4),
-            abstention_improvement_pct=round(abs_imp, 2),
-            baseline_avg_latency_seconds=round(base_avg_lat, 4),
-            corrected_avg_latency_seconds=round(corr_avg_lat, 4),
-            question_results=results,
-        )
-
+        report = self.generate_summary(results)
         self.export_report(report)
         return report
+
+    def generate_summary(
+        self, results: list[QuestionEvaluationResult]
+    ) -> EvaluationSummaryReport:
+        base_res = [r for r in results if r.pipeline_type == "baseline"]
+        corr_res = [r for r in results if r.pipeline_type == "corrected"]
+
+        def avg(lst: list[float]) -> float:
+            return sum(lst) / len(lst) if lst else 0.0
+
+        base_halluc = avg([r.hallucination_rate for r in base_res])
+        corr_halluc = avg([r.hallucination_rate for r in corr_res])
+        halluc_diff = corr_halluc - base_halluc
+        halluc_imp = (
+            ((base_halluc - corr_halluc) / base_halluc * 100.0) if base_halluc > 0 else 0.0
+        )
+
+        base_recall = avg([r.retrieval_recall for r in base_res])
+        corr_recall = avg([r.retrieval_recall for r in corr_res])
+        recall_imp = (
+            ((corr_recall - base_recall) / base_recall * 100.0) if base_recall > 0 else 0.0
+        )
+
+        base_cit = avg([r.citation_correctness for r in base_res])
+        corr_cit = avg([r.citation_correctness for r in corr_res])
+        cit_imp = ((corr_cit - base_cit) / base_cit * 100.0) if base_cit > 0 else 0.0
+
+        base_abs = avg([r.appropriate_abstention for r in base_res])
+        corr_abs = avg([r.appropriate_abstention for r in corr_res])
+        abs_imp = ((corr_abs - base_abs) / base_abs * 100.0) if base_abs > 0 else 0.0
+
+        return EvaluationSummaryReport(
+            run_id=str(uuid.uuid4()),
+            timestamp=datetime.now(UTC).isoformat(),
+            total_questions=len(base_res),
+            baseline_avg_hallucination_rate=round(base_halluc, 4),
+            corrected_avg_hallucination_rate=round(corr_halluc, 4),
+            hallucination_improvement_pct=round(halluc_imp, 2),
+            baseline_avg_retrieval_recall=round(base_recall, 4),
+            corrected_avg_retrieval_recall=round(corr_recall, 4),
+            retrieval_recall_improvement_pct=round(recall_imp, 2),
+            baseline_avg_citation_correctness=round(base_cit, 4),
+            corrected_avg_citation_correctness=round(corr_cit, 4),
+            citation_correctness_improvement_pct=round(cit_imp, 2),
+            baseline_appropriate_abstention_rate=round(base_abs, 4),
+            corrected_appropriate_abstention_rate=round(corr_abs, 4),
+            abstention_improvement_pct=round(abs_imp, 2),
+            baseline_avg_latency_seconds=round(avg([r.latency_seconds for r in base_res]), 4),
+            corrected_avg_latency_seconds=round(avg([r.latency_seconds for r in corr_res]), 4),
+            question_results=results,
+        )
 
     def export_report(self, report: EvaluationSummaryReport) -> tuple[Path, Path]:
         """
@@ -350,38 +330,45 @@ class EvaluationRunnerService:
             report.corrected_avg_latency_seconds
             - report.baseline_avg_latency_seconds
         )
+        halluc_diff = report.corrected_avg_hallucination_rate - report.baseline_avg_hallucination_rate
+        halluc_direction = "reduction" if halluc_diff <= 0 else "increase"
+
+        # Load golden dataset questions map for categories
+        dataset = load_golden_dataset()
+        q_cat_map = {q.id: q.category for q in dataset}
+
         # Render Markdown side-by-side comparison report
         md_lines = [
             "# Compass RAG Evaluation Report: Baseline vs. Self-Correcting RAG\n",
-            f"**Run ID**: `{report.run_id}`  \n"
-            f"**Timestamp**: `{report.timestamp}`  \n"
+            f"**Run ID**: `{report.run_id}`  \n",
+            f"**Timestamp**: `{report.timestamp}`  \n",
             f"**Total Benchmark Questions**: `{report.total_questions}` across 5 PS1 Categories\n",
             "## Summary Comparison Table\n",
-            "| Metric | Baseline RAG | Self-Correcting RAG | Improvement / Difference |",
+            "| Metric | Baseline RAG | Self-Correcting RAG | Difference |",
             "| :--- | :---: | :---: | :---: |",
             (
                 f"| **Hallucination Rate** (Lower is better) | "
                 f"`{report.baseline_avg_hallucination_rate:.2%}` | "
                 f"`{report.corrected_avg_hallucination_rate:.2%}` | "
-                f"**+{report.hallucination_improvement_pct:.1f}%** reduction |"
+                f"**{abs(report.hallucination_improvement_pct):.1f}%** {halluc_direction} |"
             ),
             (
                 f"| **Retrieval Recall** (Higher is better) | "
                 f"`{report.baseline_avg_retrieval_recall:.2%}` | "
                 f"`{report.corrected_avg_retrieval_recall:.2%}` | "
-                f"**+{report.retrieval_recall_improvement_pct:.1f}%** relative |"
+                f"`{report.retrieval_recall_improvement_pct:+.1f}%` relative |"
             ),
             (
                 f"| **Citation Correctness** (Higher is better) | "
                 f"`{report.baseline_avg_citation_correctness:.2%}` | "
                 f"`{report.corrected_avg_citation_correctness:.2%}` | "
-                f"**+{report.citation_correctness_improvement_pct:.1f}%** relative |"
+                f"`{report.citation_correctness_improvement_pct:+.1f}%` relative |"
             ),
             (
                 f"| **Appropriate Abstention Rate** (Higher is better) | "
                 f"`{report.baseline_appropriate_abstention_rate:.2%}` | "
                 f"`{report.corrected_appropriate_abstention_rate:.2%}` | "
-                f"**+{report.abstention_improvement_pct:.1f}%** relative |"
+                f"`{report.abstention_improvement_pct:+.1f}%` relative |"
             ),
             (
                 f"| **Average Latency per Question** | "
@@ -392,9 +379,9 @@ class EvaluationRunnerService:
             "\n## Per-Question Granular Results\n",
             (
                 "| QID | Category | Baseline Status | Corrected Status | "
-                "Baseline Halluc | Corrected Halluc |"
+                "Baseline Halluc | Corrected Halluc | Baseline Answer | Corrected Answer |"
             ),
-            "| :---: | :--- | :---: | :---: | :---: | :---: |",
+            "| :---: | :--- | :---: | :---: | :---: | :---: | :--- | :--- |",
         ]
 
         qmap_base = {
@@ -411,10 +398,13 @@ class EvaluationRunnerService:
         for qid in sorted(qmap_base.keys(), key=lambda x: int(x[1:]) if x[1:].isdigit() else 0):
             b_res = qmap_base[qid]
             c_res = qmap_corr.get(qid, b_res)
+            cat = q_cat_map.get(qid, "General")
+            b_ans = b_res.answer.replace("\n", " ")[:60]
+            c_ans = c_res.answer.replace("\n", " ")[:60]
             md_lines.append(
-                f"| **{qid}** | `{b_res.confidence_status}` | `{b_res.confidence_status}` | "
+                f"| **{qid}** | `{cat}` | `{b_res.confidence_status}` | "
                 f"`{c_res.confidence_status}` | `{b_res.hallucination_rate:.1%}` | "
-                f"`{c_res.hallucination_rate:.1%}` |"
+                f"`{c_res.hallucination_rate:.1%}` | {b_ans}... | {c_ans}... |"
             )
 
         md_content = "\n".join(md_lines)

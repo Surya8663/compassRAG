@@ -119,7 +119,19 @@ class QdrantStoreService:
         if not tenant_id:
             raise ValueError("tenant_id is mandatory for Qdrant vector search.")
 
-        self.ensure_collection(collection_name=collection_name, dimension=len(query_vector))
+        # Check collection existence without creating a new empty collection during query
+        try:
+            if not self.client.collection_exists(collection_name):
+                logger.warning(
+                    "Qdrant collection '%s' does not exist during search for tenant '%s'. "
+                    "Collection creation occurs strictly during ingestion or setup.",
+                    collection_name,
+                    tenant_id,
+                )
+                return []
+        except Exception as exc:
+            logger.error("Qdrant collection check error: %s", exc)
+            return []
 
         tenant_filter = models.Filter(
             must=[

@@ -12,6 +12,53 @@ from shared.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 
+_UNAVAILABLE_MODELS: set[str] = set()
+
+
+def is_model_unavailable(model_name: str) -> bool:
+    """Returns True if model was flagged as unavailable (e.g. 404)."""
+    return model_name in _UNAVAILABLE_MODELS
+
+
+def mark_model_unavailable(model_name: str, reason: str = "404 Not Found"):
+    """Flags a model as unavailable to fail fast on subsequent calls."""
+    if model_name not in _UNAVAILABLE_MODELS:
+        _UNAVAILABLE_MODELS.add(model_name)
+        logger.error(
+            "CONFIGURATION ERROR: LLM model '%s' is unavailable (%s). "
+            "Failing fast to local fallback synthesis for all subsequent requests.",
+            model_name,
+            reason,
+        )
+
+
+def validate_model_config(client: Any, model_name: str) -> bool:
+    """
+    Validates model availability on startup.
+    Returns True if valid, False if model returned 404 or failed.
+    """
+    if is_model_unavailable(model_name):
+        return False
+    if not client:
+        return False
+
+    try:
+        # Dry-run validation call with min tokens
+        client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+        )
+        return True
+    except Exception as exc:
+        err_msg = str(exc)
+        if any(token in err_msg.lower() for token in ("404", "429", "not found", "quota", "rate")):
+            mark_model_unavailable(model_name, reason=err_msg)
+            return False
+        logger.debug("Model validation ping failed for '%s': %s", model_name, exc)
+        return True
+
+
 def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> Any | None:
     """
     Returns an `openai.OpenAI` client configured for the selected provider (`gemini`, `grok`, or `openai`).
@@ -20,6 +67,12 @@ def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> An
     - OpenAI: standard api.openai.com with OPENAI_API_KEY
     """
     settings = settings or get_settings()
+    model_name = settings.LLM_MODEL_NAME
+
+    if is_model_unavailable(model_name):
+        logger.debug("Skipping client creation: model '%s' flagged as unavailable.", model_name)
+        return None
+
     provider = (settings.LLM_PROVIDER or "gemini").lower()
 
     api_key = None
@@ -36,7 +89,6 @@ def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> An
     else:
         # standard openai
         api_key = settings.OPENAI_API_KEY
-        # base_url remains None unless explicitly overridden
 
     if not api_key:
         logger.debug("No API key configured for provider '%s'; running in offline / fallback mode.", provider)

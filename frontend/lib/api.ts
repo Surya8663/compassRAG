@@ -64,38 +64,29 @@ export class CompassApiClient {
    * Ingest a document file
    */
   async ingestDocument(file: File): Promise<{ job_id: string; document_id: string }> {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("tenant_id", this.tenantId);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("tenant_id", this.tenantId);
 
-      const response = await fetch(`${API_BASE_URL}/ingest`, {
-        method: "POST",
-        headers: {
-          "X-Tenant-ID": this.tenantId,
-        },
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Failed to upload document");
-      return await response.json();
-    } catch (err) {
-      console.warn("Using mock ingestion response:", err);
-      return {
-        job_id: `job_${Math.random().toString(36).substring(2, 9)}`,
-        document_id: `doc_${Math.random().toString(36).substring(2, 9)}`,
-      };
+    const response = await fetch(`${API_BASE_URL}/ingest`, {
+      method: "POST",
+      headers: {
+        "X-Tenant-ID": this.tenantId,
+      },
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Ingestion Upload Failed (${response.status}): ${errorText || "Backend Service Unavailable"}`);
     }
+    return await response.json();
   }
 
   /**
    * Check ingestion job status
    */
-  async getJobStatus(jobId: string): Promise<{ status: string; progress: number; chunks: number }> {
-    try {
-      return await this.fetchWithAuth(`/status/${jobId}`);
-    } catch {
-      return { status: "INDEXED", progress: 100, chunks: 42 };
-    }
+  async getJobStatus(jobId: string): Promise<{ status: string; progress: number; chunks: number; error?: string }> {
+    return await this.fetchWithAuth(`/status/${jobId}`);
   }
 
   /**

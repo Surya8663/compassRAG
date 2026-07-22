@@ -1,32 +1,34 @@
 # Compass RAG Evaluation Report: Baseline vs. Self-Correcting RAG
 
-**Run ID**: `28134421-4fb5-4864-a4f8-7b8eae64ea25`  
-**Timestamp**: `2026-07-22T14:30:07.203770+00:00`  
+**Run ID**: `b45b5f44-029e-4c7c-a36e-b13ee47205fb`  
+
+**Timestamp**: `2026-07-22T16:01:37.037573+00:00`  
+
 **Total Benchmark Questions**: `12` across 5 PS1 Categories
 
 ## Summary Comparison Table
 
-| Metric | Baseline RAG | Self-Correcting RAG | Improvement / Difference |
+| Metric | Baseline RAG | Self-Correcting RAG | Difference |
 | :--- | :---: | :---: | :---: |
-| **Hallucination Rate** (Lower is better) | `9.74%` | `15.99%` | **+-64.2%** reduction |
-| **Retrieval Recall** (Higher is better) | `82.41%` | `82.41%` | **+0.0%** relative |
-| **Citation Correctness** (Higher is better) | `0.00%` | `0.00%` | **+0.0%** relative |
-| **Appropriate Abstention Rate** (Higher is better) | `75.00%` | `75.00%` | **+0.0%** relative |
-| **Average Latency per Question** | `0.266s` | `10.313s` | `+10.047s` |
+| **Hallucination Rate** (Lower is better) | `2.71%` | `0.00%` | **100.0%** reduction |
+| **Retrieval Recall** (Higher is better) | `65.74%` | `0.00%` | `-100.0%` relative |
+| **Citation Correctness** (Higher is better) | `100.00%` | `0.00%` | `-100.0%` relative |
+| **Appropriate Abstention Rate** (Higher is better) | `75.00%` | `0.00%` | `-100.0%` relative |
+| **Average Latency per Question** | `1.965s` | `0.000s` | `-1.965s` |
 
 ## Per-Question Granular Results
 
-| QID | Category | Baseline Status | Corrected Status | Baseline Halluc | Corrected Halluc |
-| :---: | :--- | :---: | :---: | :---: | :---: |
-| **Q1** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `14.3%` | `14.3%` |
-| **Q2** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `5.6%` | `5.6%` |
-| **Q3** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` |
-| **Q4** | `VERIFIED` | `VERIFIED` | `LOW_CONFIDENCE` | `25.0%` | `100.0%` |
-| **Q5** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `14.3%` | `14.3%` |
-| **Q6** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` |
-| **Q7** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `6.7%` | `6.7%` |
-| **Q8** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `16.7%` | `16.7%` |
-| **Q9** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `5.3%` | `5.3%` |
-| **Q10** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` |
-| **Q11** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `12.5%` | `12.5%` |
-| **Q12** | `VERIFIED` | `VERIFIED` | `VERIFIED` | `16.7%` | `16.7%` |
+| QID | Category | Baseline Status | Corrected Status | Baseline Halluc | Corrected Halluc | Baseline Answer | Corrected Answer |
+| :---: | :--- | :---: | :---: | :---: | :---: | :--- | :--- |
+| **Q1** | `directly_answerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Every full-time employee is entitled to a $1,500 annual hard... | Every full-time employee is entitled to a $1,500 annual hard... |
+| **Q2** | `directly_answerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | All staff must be available for synchronous collaboration be... | All staff must be available for synchronous collaboration be... |
+| **Q3** | `directly_answerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Employees receive 20 days of paid annual leave per year. Up ... | Employees receive 20 days of paid annual leave per year. Up ... |
+| **Q4** | `directly_answerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | The company provides a $75 monthly wellness stipend for gym ... | The company provides a $75 monthly wellness stipend for gym ... |
+| **Q5** | `ocr_dependent` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | 1. Hotel Accommodation: Due to increased hospitality costs, ... | 1. Hotel Accommodation: Due to increased hospitality costs, ... |
+| **Q6** | `ocr_dependent` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [... | Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [... |
+| **Q7** | `unanswerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Company IT Equipment Allowance Policy [handbook_2026.pdf_p1]... | Company IT Equipment Allowance Policy [handbook_2026.pdf_p1]... |
+| **Q8** | `unanswerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [... | Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [... |
+| **Q9** | `contradictory_document` | `VERIFIED` | `VERIFIED` | `12.5%` | `12.5%` | allowable hotel accommodation expense is now $250 per night.... | allowable hotel accommodation expense is now $250 per night.... |
+| **Q10** | `contradictory_document` | `VERIFIED` | `VERIFIED` | `20.0%` | `20.0%` | 2. Meal Per Diem: International meal per diem is capped at $... | 2. Meal Per Diem: International meal per diem is capped at $... |
+| **Q11** | `ambiguous` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | Employees may work remotely on ad-hoc days subject to manage... | Employees may work remotely on ad-hoc days subject to manage... |
+| **Q12** | `directly_answerable` | `VERIFIED` | `VERIFIED` | `0.0%` | `0.0%` | HiDevs Bangalore, India (Hybrid) [G_Surya_Resume.pdf_p1] · B... | HiDevs Bangalore, India (Hybrid) [G_Surya_Resume.pdf_p1] · B... |
