@@ -31,7 +31,6 @@ class BaselineRAGPipeline:
         query: str,
         tenant_id: str = "eval_tenant",
         top_k: int = 5,
-        pre_retrieved_chunks: list[DocumentChunk] | None = None,
     ) -> dict[str, Any]:
         """
         Executes baseline retrieval and synthesis.
@@ -44,24 +43,22 @@ class BaselineRAGPipeline:
         """
         start_time = time.perf_counter()
 
-        if pre_retrieved_chunks is not None:
-            chunks = pre_retrieved_chunks
-            status = "VERIFIED"
-        else:
-            try:
-                raw_results, _, status, _ = self.retriever.retrieve(
-                    query=query, tenant_id=tenant_id, top_k=top_k
-                )
-                chunks = []
-                for item in raw_results:
-                    if isinstance(item, DocumentChunk):
-                        chunks.append(item)
-                    elif isinstance(item, dict):
-                        chunks.append(DocumentChunk.model_validate(item))
-            except Exception as exc:
-                logger.warning("Retriever search failed in baseline run: %s", exc)
-                chunks = []
-                status = "UNVERIFIED"
+        try:
+            raw_results, _, status, _ = self.retriever.retrieve(
+                query=query, tenant_id=tenant_id, top_k=top_k
+            )
+            chunks = []
+            for item in raw_results:
+                if isinstance(item, DocumentChunk):
+                    chunks.append(item)
+                elif hasattr(item, "chunk") and isinstance(item.chunk, DocumentChunk):
+                    chunks.append(item.chunk)
+                elif isinstance(item, dict):
+                    chunks.append(DocumentChunk.model_validate(item))
+        except Exception as exc:
+            logger.warning("Retriever search failed in baseline run: %s", exc)
+            chunks = []
+            status = "UNVERIFIED"
 
         try:
             answer, citations = self.synthesizer.synthesize(query=query, chunks=chunks)

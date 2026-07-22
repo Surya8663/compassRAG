@@ -27,16 +27,14 @@ class ContradictionDetectorService:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.provider = self.settings.EMBEDDING_PROVIDER  # 'local' or 'openai'
-        self.model_name = getattr(
-            self.settings, "LOCAL_NLI_MODEL", "cross-encoder/nli-deberta-v3-small"
-        )
+        self.model_name = self.settings.LOCAL_NLI_MODEL
         self._local_model: Any = None
         self._openai_client: Any = None
 
         from shared.utils.llm_client import get_llm_client
         self._openai_client = get_llm_client(self.settings, timeout=5.0)
         if not self._openai_client:
-            if self.settings.ENVIRONMENT != "testing" and self.model_name != "local":
+            if self.settings.ENVIRONMENT != "testing" and self.model_name not in ("local", "none"):
                 try:
                     from sentence_transformers import CrossEncoder
                     self._local_model = CrossEncoder(self.model_name)
@@ -62,8 +60,10 @@ class ContradictionDetectorService:
                     '{"relationship": "CONTRADICTION" | "ENTAILMENT" | "NEUTRAL", '
                     '"confidence": float between 0.0 and 1.0, "explanation": "string"}'
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                    model=eff_model,
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -77,8 +77,9 @@ class ContradictionDetectorService:
                 return rel, conf, reason
             except Exception as exc:
                 logger.warning(
-                    "OpenAI NLI evaluation error: %s. Falling back to local/heuristic NLI.", exc
+                    "OpenAI NLI evaluation error: %s. Disabling OpenAI client.", exc
                 )
+                self._openai_client = None
 
         if self._local_model:
             try:
@@ -98,7 +99,8 @@ class ContradictionDetectorService:
                     f"Local NLI `{self.model_name}` predicted {verdict} ({confidence:.2f}).",
                 )
             except Exception as exc:
-                logger.debug("Local NLI prediction failed: %s", exc)
+                logger.warning("Local NLI prediction error (%s). Disabling local CrossEncoder NLI model.", exc)
+                self._local_model = None
 
         # Exact offline NLI heuristic fallback when real models are offline during unit tests
         lower_a = text_a.lower()
@@ -200,19 +202,21 @@ class ContradictionDetectorService:
                 "Fewer than 2 chunks retrieved; contradiction evaluation skipped.",
             )
 
-        def get_chunk_info(res: Any, idx: int) -> tuple[str, str, str]:
+        def get_chunk_info(res: Any, idx: int) -> tuple[str, str, str, str]:
             c = res.chunk if hasattr(res, "chunk") else res
             if isinstance(c, dict):
                 cid = str(c.get("id") or c.get("chunk_id") or f"chk_{idx}")
                 content = str(c.get("content", ""))
+                doc_id = str(c.get("document_id", "unknown"))
                 meta = c.get("metadata") or {}
                 ver = str(meta.get("version_id", "v1.0") if isinstance(meta, dict) else "v1.0")
             else:
                 cid = getattr(c, "id", f"chk_{idx}")
                 content = getattr(c, "content", "")
+                doc_id = getattr(c, "document_id", "unknown")
                 meta = getattr(c, "metadata", None)
                 ver = getattr(meta, "version_id", "v1.0") if meta else "v1.0"
-            return cid, content, ver
+            return cid, content, ver, doc_id
 
         contradictions_detected = False
         has_same_date_contradiction = False
@@ -223,9 +227,11 @@ class ContradictionDetectorService:
             for j in range(i + 1, len(chunks)):
                 ca = chunks[i]
                 cb = chunks[j]
-                cid_a, content_a, ver_a = get_chunk_info(ca, i)
-                cid_b, content_b, ver_b = get_chunk_info(cb, j)
+                cid_a, content_a, ver_a, doc_a = get_chunk_info(ca, i)
+                cid_b, content_b, ver_b, doc_b = get_chunk_info(cb, j)
                 if cid_a in superseded_chunk_ids or cid_b in superseded_chunk_ids:
+                    continue
+                if doc_a == doc_b and doc_a != "unknown":
                     continue
 
                 verdict, conf, exp = self._evaluate_pair_nli(content_a, content_b)

@@ -70,3 +70,21 @@ async def check_job_status(
     Enforces JWT authentication and tenant ownership verification.
     """
     return gateway_orchestrator.get_job_status(job_id, tenant_context)
+
+
+@router.get("/evaluation/results", status_code=200)
+async def get_evaluation_results():
+    """
+    Returns the latest 12-question benchmark evaluation results from evaluation_results.json.
+    """
+    import json
+    from pathlib import Path
+
+    json_path = Path.cwd() / "evaluation_results.json"
+    if not json_path.exists():
+        json_path = Path(__file__).resolve().parent.parent.parent.parent / "evaluation_results.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="evaluation_results.json not found")
+
+    with open(json_path, encoding="utf-8") as f:
+        return json.load(f)

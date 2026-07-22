@@ -60,8 +60,10 @@ class GroundednessCheckerService:
                     "Respond with JSON strictly formatted as:\n"
                     '{"claims": ["claim 1", "claim 2", ...]}'
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model_cd = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=eff_model_cd,
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -112,8 +114,10 @@ class GroundednessCheckerService:
                     "Respond with JSON strictly formatted as:\n"
                     '{"is_entailed": boolean, "reason": "explanation string"}'
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gpt-4o-mini",
+                    model=eff_model,
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.0,
@@ -123,7 +127,8 @@ class GroundednessCheckerService:
                 reason = str(data.get("reason", f"LLM evaluated entailment as {is_ent}."))
                 return is_ent, reason
             except Exception as exc:
-                logger.warning("LLM entailment evaluation error: %s. Using local NLI.", exc)
+                logger.warning("LLM entailment evaluation error: %s. Disabling OpenAI client.", exc)
+                self._openai_client = None
 
         detector = get_contradiction_detector()
         verdict, conf, exp = detector._evaluate_pair_nli(context_text, claim)

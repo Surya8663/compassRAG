@@ -340,6 +340,18 @@ def route_after_groundedness(state: CorrectionGraphState) -> str:
     settings = get_settings()
     score = state.get("groundedness_score", 0.0)
     attempts = state.get("attempt_count", 0)
+    draft = state.get("draft_answer", "").lower()
+
+    # If the draft explicitly abstains due to insufficient context, finalize immediately
+    abstention_phrases = [
+        "insufficient information",
+        "no relevant context",
+        "do not contain",
+        "no information",
+        "cannot provide",
+    ]
+    if any(p in draft for p in abstention_phrases):
+        return "finalize_answer"
 
     if score >= settings.CORRECTION_CONFIDENCE_THRESHOLD:
         return "finalize_answer"

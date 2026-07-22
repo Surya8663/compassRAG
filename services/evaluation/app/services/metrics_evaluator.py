@@ -107,7 +107,8 @@ class MetricsEvaluator:
     ) -> float:
         """
         Computes hallucination rate (`1.0 - groundedness_score`).
-        Abstentions, clarification requests, and low-confidence responses score 0.0 hallucination.
+        - Safe abstentions / clarification requests receive 0.0 hallucination.
+        - Confidently producing unsupported/irrelevant content for unanswerable questions (e.g. Q7, Q8) counts as hallucination (1.0).
         """
         ans_lower = answer.lower()
         abstention_phrases = [
@@ -123,9 +124,15 @@ class MetricsEvaluator:
             "clarification is required",
             "no verified context",
             "no relevant context available",
+            "does not contain information",
         ]
-        if question.should_abstain or any(p in ans_lower for p in abstention_phrases):
+        is_abstained = any(p in ans_lower for p in abstention_phrases)
+        if is_abstained:
             return 0.0
+
+        if question.should_abstain:
+            # If question requires abstention but answer produced factual content instead of abstaining, it's hallucinated!
+            return 1.0
 
         checker = self._get_groundedness_checker()
         if checker is None:
@@ -180,7 +187,6 @@ class MetricsEvaluator:
             clean_snippet = claim_text.strip().lower()
 
             if not clean_snippet:
-                verified_count += 1
                 continue
 
             # 1. First check exact or fuzzy snippet inclusion in chunk content
@@ -203,19 +209,32 @@ class MetricsEvaluator:
         or correctly responds with answer when `should_abstain == False`.
         """
         ans_lower = answer.lower()
+        abstention_statuses = {
+            "LOW_CONFIDENCE",
+            "CLARIFICATION_NEEDED",
+            "INSUFFICIENT_INFORMATION",
+            "UNVERIFIED",
+            "AMBIGUOUS",
+        }
+        abstention_phrases = [
+            "low_confidence",
+            "clarification_needed",
+            "cannot provide a definitive or verified answer",
+            "evidence is insufficient",
+            "available documentation does not support",
+            "unable to verify",
+            "insufficient information",
+            "do not contain",
+            "no information",
+            "clarification is required",
+            "no verified context",
+            "no relevant context available",
+            "does not contain information",
+            "error during baseline",
+        ]
         is_abstained = (
-            status in ["UNVERIFIED", "INSUFFICIENT_INFORMATION", "AMBIGUOUS"]
-            or any(
-                phrase in ans_lower
-                for phrase in [
-                    "insufficient information",
-                    "do not contain",
-                    "no information",
-                    "clarification is required",
-                    "no verified context",
-                    "error during baseline",
-                ]
-            )
+            status in abstention_statuses
+            or any(phrase in ans_lower for phrase in abstention_phrases)
         )
 
         if question.should_abstain:

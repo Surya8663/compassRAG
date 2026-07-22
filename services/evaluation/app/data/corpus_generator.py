@@ -165,9 +165,9 @@ def generate_golden_corpus() -> list[Path]:
     # 6. G_Surya_Resume.pdf (Surya Resume)
     resume_path = CORPUS_DIR / "G_Surya_Resume.pdf"
     doc_resume = fitz.open()
-    p_resume = doc_resume.new_page()
+    p_resume = doc_resume.new_page(width=792, height=612)  # Landscape US Letter to avoid text wrapping
     p_resume.insert_text(
-        (50, 70),
+        (40, 50),
         "G. Surya\n"
         "Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com\n\n"
         "Summary\n"
@@ -178,7 +178,7 @@ def generate_golden_corpus() -> list[Path]:
         "– Built PeopleGPT / Aura AI Agent – RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, FastAPI (SSE); cut manual search time by 70%.\n"
         "– Optimized Dave Chatbot latency from 10–15s to ~2.5s via code review; added streaming and MongoDB session persistence.\n"
         "– Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase review time by 40%.\n",
-        fontsize=11,
+        fontsize=9,
     )
     doc_resume.save(resume_path)
     doc_resume.close()

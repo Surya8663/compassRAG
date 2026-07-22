@@ -32,20 +32,33 @@ def mark_model_unavailable(model_name: str, reason: str = "404 Not Found"):
         )
 
 
+def get_effective_model_name(client: Any, requested_model: str) -> str:
+    """
+    Returns effective model name compatible with client base_url.
+    - OpenAI API (api.openai.com): 'gpt-4o-mini'
+    - Gemini API: 'gemini-1.5-flash' if gemini-3.5-flash requested
+    """
+    if not client:
+        return requested_model
+    base_url = str(getattr(client, "base_url", ""))
+    if "openai.com" in base_url and "gemini" in requested_model.lower():
+        return "gpt-4o-mini"
+    if "generativelanguage.googleapis.com" in base_url and "3.5" in requested_model:
+        return "gemini-1.5-flash"
+    return requested_model
 def validate_model_config(client: Any, model_name: str) -> bool:
     """
     Validates model availability on startup.
     Returns True if valid, False if model returned 404 or failed.
     """
-    if is_model_unavailable(model_name):
-        return False
-    if not client:
+    if is_model_unavailable(model_name) or not client:
         return False
 
+    effective_model = get_effective_model_name(client, model_name)
     try:
         # Dry-run validation call with min tokens
         client.chat.completions.create(
-            model=model_name,
+            model=effective_model,
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=1,
         )
@@ -59,26 +72,25 @@ def validate_model_config(client: Any, model_name: str) -> bool:
         return True
 
 
+_VALIDATED_MODELS: set[str] = set()
+
+
 def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> Any | None:
     """
     Returns an `openai.OpenAI` client configured for the selected provider (`gemini`, `grok`, or `openai`).
-    - Gemini: uses https://generativelanguage.googleapis.com/v1beta/openai/ with GEMINI_API_KEY
-    - Grok: uses https://api.x.ai/v1 with XAI_API_KEY
-    - OpenAI: standard api.openai.com with OPENAI_API_KEY
+    If primary provider (e.g. Gemini 429 quota) is unavailable, automatically falls back to OpenAI if OPENAI_API_KEY is configured.
     """
     settings = settings or get_settings()
     model_name = settings.LLM_MODEL_NAME
 
-    if is_model_unavailable(model_name):
-        logger.debug("Skipping client creation: model '%s' flagged as unavailable.", model_name)
-        return None
-
     provider = (settings.LLM_PROVIDER or "gemini").lower()
-
     api_key = None
     base_url = settings.LLM_BASE_URL
 
-    if provider == "gemini" or provider == "google":
+    if is_model_unavailable(model_name) and is_model_unavailable("gpt-4o-mini"):
+        return None
+
+    if provider in ("gemini", "google"):
         api_key = settings.GEMINI_API_KEY or settings.OPENAI_API_KEY
         if not base_url:
             base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -87,7 +99,6 @@ def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> An
         if not base_url:
             base_url = "https://api.x.ai/v1"
     else:
-        # standard openai
         api_key = settings.OPENAI_API_KEY
 
     if not api_key:
@@ -96,8 +107,30 @@ def get_llm_client(settings: Settings | None = None, timeout: float = 5.0) -> An
 
     try:
         from openai import OpenAI
-        logger.info("Initializing universal LLM client for provider '%s'", provider)
-        return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        logger.info("Initializing universal LLM client for provider '%s' (model: '%s')", provider, model_name)
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0)
+
+        # Invoke validate_model_config once on startup and cache status
+        if model_name not in _VALIDATED_MODELS:
+            _VALIDATED_MODELS.add(model_name)
+            is_valid = validate_model_config(client, model_name)
+            if not is_valid and settings.OPENAI_API_KEY and provider != "openai":
+                if is_model_unavailable("gpt-4o-mini"):
+                    return None
+                logger.info("Primary provider validation failed. Re-trying with OpenAI fallback.")
+                fb_client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=timeout, max_retries=0)
+                if validate_model_config(fb_client, "gpt-4o-mini"):
+                    return fb_client
+                return None
+
+        if is_model_unavailable(model_name):
+            if settings.OPENAI_API_KEY and not is_model_unavailable("gpt-4o-mini"):
+                fb_client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=timeout, max_retries=0)
+                if validate_model_config(fb_client, "gpt-4o-mini"):
+                    return fb_client
+            return None
+
+        return client
     except Exception as exc:
         logger.warning("Failed to initialize client for provider '%s': %s", provider.upper(), exc)
         return None

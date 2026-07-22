@@ -42,8 +42,10 @@ class QueryReformulatorService:
                     f"Query:\n{query}\n\n"
                     "Respond with only the hypothetical passage text."
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                    model=eff_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.3,
                 )
@@ -55,10 +57,7 @@ class QueryReformulatorService:
 
         # Offline / local HyDE passage generation
         clean_q = query.strip(" ?.")
-        return (
-            f"Reference documentation for {clean_q}: The system specifications state that "
-            f"{clean_q} operates with standard operational parameters and verified values."
-        )
+        return clean_q
 
     def _apply_multi_query_expansion(self, query: str) -> str:
         """
@@ -73,8 +72,10 @@ class QueryReformulatorService:
                     "Respond with JSON strictly formatted as:\n"
                     '{"queries": ["query 1", "query 2", "query 3"]}'
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model2 = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                    model=eff_model2,
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.3,

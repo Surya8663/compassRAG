@@ -162,6 +162,10 @@ class Settings(BaseSettings):
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",
         description="Local CrossEncoder reranking model name",
     )
+    LOCAL_NLI_MODEL: str = Field(
+        default="none",
+        description="Local NLI CrossEncoder model name for contradiction detection. Set to 'none' to disable.",
+    )
     COHERE_RERANK_MODEL: str = Field(
         default="rerank-english-v3.0",
         description="Cohere reranking model name when provider is 'cohere'",

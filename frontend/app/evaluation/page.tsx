@@ -23,9 +23,17 @@ export default function EvaluationPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const data = apiClient.getEvaluationMetrics();
-    setMetrics(data);
-    setIsLoading(false);
+    async function loadMetrics() {
+      try {
+        const data = await apiClient.fetchEvaluationMetrics();
+        setMetrics(data);
+      } catch (err) {
+        console.error("Error loading evaluation metrics:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadMetrics();
   }, []);
 
   const filteredMetrics = metrics.filter((m) => {

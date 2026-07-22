@@ -45,71 +45,105 @@ def load_golden_dataset(dataset_path: Path | None = None) -> list[GoldenQuestion
     return [GoldenQuestion.model_validate(item) for item in data]
 
 
-def load_corpus_as_chunks() -> list[DocumentChunk]:
+def load_corpus_as_chunks(tenant_id: str = "eval_tenant") -> tuple[list[DocumentChunk], dict[str, Any]]:
     """
-    Loads all generated evaluation PDFs from `golden_corpus/` into `DocumentChunk`
-    objects so evaluation can run self-contained local retrieval if Qdrant/ES are offline.
+    Ingests all 6 generated evaluation PDFs from `golden_corpus/` into Qdrant and Elasticsearch under `tenant_id`.
+    Sends scanned image receipts through document classification and Tesseract OCR.
+    Enforces strict OCR assertions for reimbursement_receipt_scanned.pdf.
     """
+    from services.ingestion.app.pipeline.classifier import classify_and_extract_page
+    from services.ingestion.app.pipeline.chunker import get_chunker_service
+    from services.ingestion.app.pipeline.ocr import process_page_ocr
+    from services.ingestion.app.pipeline.pii_redaction import get_pii_service
+    from services.retrieval.app.services.embedder import get_embedding_service
+    from services.retrieval.app.services.es_store import get_es_store
+    from services.retrieval.app.services.qdrant_store import get_qdrant_store
+
     generate_golden_corpus()
-    chunks: list[DocumentChunk] = []
+
+    pii = get_pii_service()
+    chunker = get_chunker_service()
+    embedder = get_embedding_service()
+    q_store = get_qdrant_store()
+    es_store = get_es_store()
+
+    q_store.ensure_collection(collection_name="compass_rag_chunks", dimension=384)
+    es_store.ensure_index(index_name="compass_rag_chunks")
+
+    all_chunks: list[DocumentChunk] = []
+    ocr_meta: dict[str, Any] = {}
 
     for pdf_path in CORPUS_DIR.glob("*.pdf"):
         try:
             doc = fitz.open(pdf_path)
             for page_num, page in enumerate(doc, start=1):
-                text = page.get_text().strip()
-                if not text:
+                native_text = page.get_text("text") or ""
+                page_class, text_extract = classify_and_extract_page(page, min_text_length=20)
+
+                ocr_invoked = False
+                page_text = text_extract
+                ocr_conf = 0.99
+
+                if page_class == "SCANNED_IMAGE" or not text_extract.strip():
+                    ocr_invoked = True
+                    ocr_text, ocr_conf = process_page_ocr(page)
+                    page_text = ocr_text
+
+                # Perform strict assertions on reimbursement_receipt_scanned.pdf
+                if pdf_path.name == "reimbursement_receipt_scanned.pdf":
+                    ocr_meta["native_text_len"] = len(native_text.strip())
+                    ocr_meta["page_class"] = page_class
+                    ocr_meta["ocr_invoked"] = ocr_invoked
+                    ocr_meta["ocr_text"] = page_text
+
+                    logger.info("OCR Verification for %s: native_len=%d, class=%s, ocr_invoked=%s", pdf_path.name, len(native_text.strip()), page_class, ocr_invoked)
+
+                    assert len(native_text.strip()) <= 20, f"Native text should be empty/nearly empty for scanned receipt, got len={len(native_text.strip())}"
+                    assert page_class == "SCANNED_IMAGE", f"Expected SCANNED_IMAGE classification, got {page_class}"
+                    assert ocr_invoked, "Tesseract OCR should have been invoked for scanned receipt"
+                    assert "Apex Catering" in page_text, f"OCR failed to extract 'Apex Catering' from receipt. Text: {page_text}"
+                    assert "485.50" in page_text, f"OCR failed to extract '485.50' from receipt. Text: {page_text}"
+                    assert "99-8877665" in page_text, f"OCR failed to extract '99-8877665' from receipt. Text: {page_text}"
+                    logger.info("All OCR assertions passed for reimbursement_receipt_scanned.pdf!")
+
+                if not page_text.strip():
                     continue
-                meta = DocumentMetadata(
+
+                redacted = pii.redact_text(page_text)
+                p_chunks = chunker.chunk_and_tag_page(
+                    redacted_text=redacted,
+                    document_id=pdf_path.name,
                     source=pdf_path.name,
                     page_number=page_num,
                     ingestion_timestamp=datetime.now(UTC),
-                    tenant_id="eval_tenant",
+                    tenant_id=tenant_id,
                     version_id="1.0",
-                    ocr_confidence=0.99,
                 )
-                chunk = DocumentChunk(
-                    id=f"{pdf_path.name}_p{page_num}",
-                    document_id=pdf_path.name,
-                    content=text,
-                    metadata=meta,
-                )
-                chunks.append(chunk)
+
+                for c in p_chunks:
+                    all_chunks.append(c)
+                    vec = embedder.embed_text(c.content)
+                    q_store.upsert_chunk(c, vec)
+                    es_store.index_chunk(c)
+
             doc.close()
         except Exception as exc:
-            logger.warning("Failed to extract text from %s: %s", pdf_path, exc)
+            logger.error("Failed to process benchmark PDF %s: %s", pdf_path, exc, exc_info=True)
+            raise
 
-    return chunks
+    logger.info("Successfully ingested %d chunks into Qdrant & ES for tenant '%s'", len(all_chunks), tenant_id)
+    return all_chunks, ocr_meta
 
 
 class EvaluationRunnerService:
     """
-    Orchestrates execution of the 15 evaluation questions across Baseline and Corrected pipelines,
+    Orchestrates execution of the 12 evaluation questions across Baseline and Corrected pipelines,
     aggregates metrics, and generates comparison reports.
     """
 
     def __init__(self) -> None:
         self.baseline_pipeline = BaselineRAGPipeline()
         self.metrics_evaluator = MetricsEvaluator()
-        self.corpus_chunks = load_corpus_as_chunks()
-
-    def _filter_chunks_for_question(self, question: GoldenQuestion) -> list[DocumentChunk]:
-        """
-        Retrieves candidate corpus chunks using text term matching without using expected_chunk_ids.
-        """
-        stop_words = {"what", "is", "the", "amount", "for", "in", "on", "of", "and", "or", "to", "a", "an", "does", "do", "can", "i"}
-        tokens = [w.lower().strip("?,.") for w in question.question.split() if w.lower().strip("?,.") not in stop_words and len(w) > 2]
-
-        scored_chunks: list[tuple[float, DocumentChunk]] = []
-        for c in self.corpus_chunks:
-            c_text = c.content.lower()
-            matches = sum(1 for t in tokens if t in c_text)
-            if matches > 0:
-                scored_chunks.append((float(matches), c))
-
-        scored_chunks.sort(key=lambda x: x[0], reverse=True)
-        results = [chunk for _, chunk in scored_chunks[:10]]
-        return results if results else self.corpus_chunks[:3]
 
     def _invoke_graph(self, graph: Any, initial_state: dict[str, Any]) -> dict[str, Any]:
         """Safely invoke the async correction graph synchronously."""
@@ -137,20 +171,20 @@ class EvaluationRunnerService:
         questions = dataset or load_golden_dataset()
         results: list[QuestionEvaluationResult] = []
 
-        # Ensure corpus is generated and loaded
-        if not self.corpus_chunks:
-            self.corpus_chunks = load_corpus_as_chunks()
+        # 1. Ingest corpus into Qdrant & ES with strict OCR assertions
+        logger.info("Starting benchmark corpus ingestion for tenant '%s'...", tenant_id)
+        corpus_chunks, ocr_meta = load_corpus_as_chunks(tenant_id=tenant_id)
+        assert len(corpus_chunks) > 0, "Ingested corpus chunks must not be empty"
 
         for q in questions:
-            # Add rate-limiting pause between benchmark questions
-            time.sleep(2.0)
-            # 1. Run Baseline RAG Pipeline
-            candidate_chunks = self._filter_chunks_for_question(q)
+            time.sleep(1.0)
+            logger.info("Evaluating Question %s (%s): %s", q.id, q.category, q.question)
+
+            # 1. Run Baseline RAG Pipeline through genuine retrieval
             base_out = self.baseline_pipeline.run(
                 query=q.question,
                 tenant_id=tenant_id,
                 top_k=5,
-                pre_retrieved_chunks=candidate_chunks,
             )
             base_answer = base_out["answer"]
             base_status = base_out["confidence_status"]
@@ -182,14 +216,14 @@ class EvaluationRunnerService:
             )
             results.append(base_res)
 
-            # 2. Run Self-Correcting RAG Pipeline (`CorrectionRouterGraph`)
+            # 2. Run Self-Correcting RAG Pipeline (`CorrectionRouterGraph`) through genuine retrieval
             start_corr = time.perf_counter()
             initial_state = {
                 "query": q.question,
                 "tenant_id": tenant_id,
                 "original_query": q.question,
                 "attempt_count": 0,
-                "retrieved_chunks": candidate_chunks,
+                "retrieved_chunks": [],
                 "retrieval_confidence": 0.0,
                 "retrieval_status": ConfidenceStatus.VERIFIED,
                 "contradictions_detected": False,
@@ -219,13 +253,13 @@ class EvaluationRunnerService:
                 corr_chunks = [
                     r.chunk if hasattr(r, "chunk") else r
                     for r in corr_state.get("retrieved_chunks", [])
-                ] or candidate_chunks
+                ]
                 corr_citations = corr_state.get("draft_citations", [])
             except Exception as exc:
                 logger.warning("Correction graph run failed for %s: %s", q.id, exc)
                 corr_answer = "Error during correction graph execution."
                 corr_status_str = "LOW_CONFIDENCE"
-                corr_chunks = candidate_chunks
+                corr_chunks = []
                 corr_citations = []
 
             corr_latency = time.perf_counter() - start_corr
@@ -253,6 +287,40 @@ class EvaluationRunnerService:
                     getattr(c, "chunk_id", str(c)) for c in corr_citations
                 ],
             )
+            # CRITICAL FIX: Append corr_res immediately inside question loop
+            results.append(corr_res)
+
+        # STRICT ASSERTIONS ON RESULT COUNTS
+        base_runs = [r for r in results if r.pipeline_type == "baseline"]
+        corr_runs = [r for r in results if r.pipeline_type == "corrected"]
+
+        assert len(base_runs) == 12, f"Expected exactly 12 baseline results, got {len(base_runs)}"
+        assert len(corr_runs) == 12, f"Expected exactly 12 corrected results, got {len(corr_runs)}"
+        assert len(results) == 24, f"Expected exactly 24 total QuestionEvaluationResult objects, got {len(results)}"
+        logger.info("All 24 evaluation results successfully collected and verified!")
+
+        # QUESTION-SPECIFIC ASSERTIONS REQUIRED BY BENCHMARK
+        qmap_corr = {r.question_id: r for r in corr_runs}
+
+        # Q5 & Q6 prove OCR retrieval
+        for qid in ["Q5", "Q6"]:
+            q_res = qmap_corr.get(qid)
+            assert q_res is not None, f"Result missing for {qid}"
+            assert q_res.retrieval_recall > 0, f"{qid} must successfully retrieve OCR receipt chunks"
+
+        # Q7 & Q8 appropriate abstention
+        for qid in ["Q7", "Q8"]:
+            q_res = qmap_corr.get(qid)
+            assert q_res is not None, f"Result missing for {qid}"
+            assert q_res.appropriate_abstention == 1.0, f"{qid} must appropriately abstain on unanswerable queries"
+
+        # Q12 HiDevs experience
+        q12_res = qmap_corr.get("Q12")
+        assert q12_res is not None, "Result missing for Q12"
+        q12_ans_lower = q12_res.answer.lower()
+        for fact in ["peoplegpt", "13,000", "70%", "dave", "2.5", "github", "40%"]:
+            assert fact in q12_ans_lower, f"Q12 final answer missing required fact '{fact}'"
+
         report = self.generate_summary(results)
         self.export_report(report)
         return report
@@ -314,7 +382,7 @@ class EvaluationRunnerService:
         Returns paths (`json_path`, `md_path`).
         """
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        root_dir = Path.cwd()
+        root_dir = Path(__file__).resolve().parent.parent.parent.parent
         json_path = REPORTS_DIR / "evaluation_comparison_report.json"
         md_path = REPORTS_DIR / "evaluation_comparison_report.md"
         root_json_path = root_dir / "evaluation_results.json"
@@ -397,7 +465,10 @@ class EvaluationRunnerService:
 
         for qid in sorted(qmap_base.keys(), key=lambda x: int(x[1:]) if x[1:].isdigit() else 0):
             b_res = qmap_base[qid]
-            c_res = qmap_corr.get(qid, b_res)
+            # STRICT FIX: Raise KeyError if corrected result is missing instead of fallback
+            if qid not in qmap_corr:
+                raise KeyError(f"Corrected evaluation result missing for question {qid}")
+            c_res = qmap_corr[qid]
             cat = q_cat_map.get(qid, "General")
             b_ans = b_res.answer.replace("\n", " ")[:60]
             c_ans = c_res.answer.replace("\n", " ")[:60]

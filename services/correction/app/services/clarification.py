@@ -63,8 +63,10 @@ class ClarificationAndFallbackService:
                     f"Conflicting Document Excerpts:\n{conflicts_text}\n\n"
                     "Respond with only the clarifying question to present to the user."
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                    model=eff_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )
@@ -107,8 +109,10 @@ class ClarificationAndFallbackService:
                     f"Last Audit Reasoning: {reasoning}\n\n"
                     "Respond with only the low-confidence response to present to the user."
                 )
+                from shared.utils.llm_client import get_effective_model_name
+                eff_model2 = get_effective_model_name(self._openai_client, self.settings.LLM_MODEL_NAME or "gpt-4o-mini")
                 response = self._openai_client.chat.completions.create(
-                    model=self.settings.LLM_MODEL_NAME or "gemini-3.5-flash",
+                    model=eff_model2,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )

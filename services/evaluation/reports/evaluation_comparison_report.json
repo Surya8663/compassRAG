@@ -1,205 +1,359 @@
 {
-  "run_id": "b45b5f44-029e-4c7c-a36e-b13ee47205fb",
-  "timestamp": "2026-07-22T16:01:37.037573+00:00",
+  "run_id": "ccaaec9a-de6f-43f6-84bb-79e673968444",
+  "timestamp": "2026-07-22T17:37:32.854943+00:00",
   "total_questions": 12,
-  "baseline_avg_hallucination_rate": 0.0271,
-  "corrected_avg_hallucination_rate": 0.0,
-  "hallucination_improvement_pct": 100.0,
-  "baseline_avg_retrieval_recall": 0.6574,
-  "corrected_avg_retrieval_recall": 0.0,
-  "retrieval_recall_improvement_pct": -100.0,
-  "baseline_avg_citation_correctness": 1.0,
-  "corrected_avg_citation_correctness": 0.0,
-  "citation_correctness_improvement_pct": -100.0,
-  "baseline_appropriate_abstention_rate": 0.75,
-  "corrected_appropriate_abstention_rate": 0.0,
-  "abstention_improvement_pct": -100.0,
-  "baseline_avg_latency_seconds": 1.9648,
-  "corrected_avg_latency_seconds": 0.0,
+  "baseline_avg_hallucination_rate": 0.0,
+  "corrected_avg_hallucination_rate": 0.1812,
+  "hallucination_improvement_pct": 0.0,
+  "baseline_avg_retrieval_recall": 0.0,
+  "corrected_avg_retrieval_recall": 0.8333,
+  "retrieval_recall_improvement_pct": 0.0,
+  "baseline_avg_citation_correctness": 0.0,
+  "corrected_avg_citation_correctness": 0.8333,
+  "citation_correctness_improvement_pct": 0.0,
+  "baseline_appropriate_abstention_rate": 0.25,
+  "corrected_appropriate_abstention_rate": 0.9167,
+  "abstention_improvement_pct": 266.67,
+  "baseline_avg_latency_seconds": 0.0005,
+  "corrected_avg_latency_seconds": 0.2705,
   "question_results": [
     {
       "question_id": "Q1",
       "pipeline_type": "baseline",
-      "answer": "Every full-time employee is entitled to a $1,500 annual hardware stipend for [handbook_2026.pdf_p1]\nCompany IT Equipment Allowance Policy [handbook_2026.pdf_p1]\npurchasing laptops, monitors, and ergonomic accessories. [handbook_2026.pdf_p1]\nThe company provides a $75 monthly wellness stipend for gym memberships, [handbook_2026.pdf_p4]\nmental health apps, and fitness tracking equipment. [handbook_2026.pdf_p4]\nAnnual Leave and Carry-Over Policy [handbook_2026.pdf_p3]\nEmployees receive 20 days of paid annual leave per year. Up to 5 unused [handbook_2026.pdf_p3]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.004527299999608658,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q1",
+      "pipeline_type": "corrected",
+      "answer": "Every full-time employee is entitled to a $1,500 annual hardware stipend for purchasing laptops, monitors, and ergonomic accessories. [handbook_2026.pdf_p1_c0]\nThe company provides a $75 monthly wellness stipend for gym memberships, mental health apps, and fitness tracking equipment. [handbook_2026.pdf_p4_c0]\nCompany IT Equipment Allowance Policy [handbook_2026.pdf_p1_c0]\nAnnual Leave and Carry-Over Policy [handbook_2026.pdf_p3_c0]\nEmployees receive 20 days of paid annual leave per year. Up to 5 unused leave days can be carried over to the following calendar year. [handbook_2026.pdf_p3_c0]\nOFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.16666666666666663,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 3.3081805000001623,
+      "latency_seconds": 1.3649922000004153,
       "citations_cited": [
-        "handbook_2026.pdf_p1",
-        "handbook_2026.pdf_p4",
-        "handbook_2026.pdf_p3"
+        "handbook_2026.pdf_p1_c0",
+        "handbook_2026.pdf_p4_c0",
+        "handbook_2026.pdf_p3_c0",
+        "reimbursement_receipt_scanned.pdf_p1_c0"
       ]
     },
     {
       "question_id": "Q2",
       "pipeline_type": "baseline",
-      "answer": "All staff must be available for synchronous collaboration between 10:00 AM [handbook_2026.pdf_p2]\nCore Working Hours Guidelines [handbook_2026.pdf_p2]\nthese core collaboration bands. [handbook_2026.pdf_p2]\nEmployees receive 20 days of paid annual leave per year. Up to 5 unused [handbook_2026.pdf_p3]\nCarry-over days must be utilized before March 31. [handbook_2026.pdf_p3]\nAll purchases must be submitted through the procurement portal. [handbook_2026.pdf_p1]\nEmployees may work remotely on ad-hoc days subject to manager discretion [remote_work_guidelines.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00018500000078347512,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q2",
+      "pipeline_type": "corrected",
+      "answer": "All staff must be available for synchronous collaboration between 10:00 AM and 3:00 PM EST Monday through Friday. Flexible working is permitted outside these core collaboration bands. [handbook_2026.pdf_p2_c0]\nCore Working Hours Guidelines [handbook_2026.pdf_p2_c0]\nEmployees receive 20 days of paid annual leave per year. Up to 5 unused leave days can be carried over to the following calendar year. [handbook_2026.pdf_p3_c0]\nCarry-over days must be utilized before March 31. [handbook_2026.pdf_p3_c0]\nAll purchases must be submitted through the procurement portal. [handbook_2026.pdf_p1_c0]\nEmployees may work remotely on ad-hoc days subject to manager discretion and operational requirements. Approval processes and notification deadlines vary by department, project phase, and team sprint schedule. [remote_work_guidelines.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are only permitted for international flights exceeding 10 hours. [travel_policy_v1_2024.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are permitted for any international flight exceeding 8 hours. [travel_policy_v2_2026.pdf_p1_c0]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.07692307692307687,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 2.0072675000001254,
+      "latency_seconds": 0.12779329999830225,
       "citations_cited": [
-        "handbook_2026.pdf_p2",
-        "handbook_2026.pdf_p3",
-        "handbook_2026.pdf_p1",
-        "remote_work_guidelines.pdf_p1"
+        "handbook_2026.pdf_p2_c0",
+        "handbook_2026.pdf_p3_c0",
+        "handbook_2026.pdf_p1_c0",
+        "remote_work_guidelines.pdf_p1_c0",
+        "travel_policy_v1_2024.pdf_p1_c0",
+        "travel_policy_v2_2026.pdf_p1_c0"
       ]
     },
     {
       "question_id": "Q3",
       "pipeline_type": "baseline",
-      "answer": "Employees receive 20 days of paid annual leave per year. Up to 5 unused [handbook_2026.pdf_p3]\nleave days can be carried over to the following calendar year. [handbook_2026.pdf_p3]\nAnnual Leave and Carry-Over Policy [handbook_2026.pdf_p3]\nCarry-over days must be utilized before March 31. [handbook_2026.pdf_p3]\nEmployees may work remotely on ad-hoc days subject to manager discretion [remote_work_guidelines.pdf_p1]\n· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, [G_Surya_Resume.pdf_p1]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for [handbook_2026.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00016080000023066532,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q3",
+      "pipeline_type": "corrected",
+      "answer": "Employees receive 20 days of paid annual leave per year. Up to 5 unused leave days can be carried over to the following calendar year. [handbook_2026.pdf_p3_c0]\nAnnual Leave and Carry-Over Policy [handbook_2026.pdf_p3_c0]\nCarry-over days must be utilized before March 31. [handbook_2026.pdf_p3_c0]\nEmployees may work remotely on ad-hoc days subject to manager discretion and operational requirements. Approval processes and notification deadlines vary by department, project phase, and team sprint schedule. [remote_work_guidelines.pdf_p1_c0]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for purchasing laptops, monitors, and ergonomic accessories. [handbook_2026.pdf_p1_c0]\nOFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]\n· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, FastAPI (SSE); cut manual search time by 70%. [G_Surya_Resume.pdf_p1_c2]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.11111111111111116,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 1.972412400000394,
+      "latency_seconds": 0.13245719999940775,
       "citations_cited": [
-        "handbook_2026.pdf_p3",
-        "remote_work_guidelines.pdf_p1",
-        "G_Surya_Resume.pdf_p1",
-        "handbook_2026.pdf_p1"
+        "handbook_2026.pdf_p3_c0",
+        "remote_work_guidelines.pdf_p1_c0",
+        "handbook_2026.pdf_p1_c0",
+        "reimbursement_receipt_scanned.pdf_p1_c0",
+        "G_Surya_Resume.pdf_p1_c2"
       ]
     },
     {
       "question_id": "Q4",
       "pipeline_type": "baseline",
-      "answer": "The company provides a $75 monthly wellness stipend for gym memberships, [handbook_2026.pdf_p4]\nEmployee Wellness Benefits [handbook_2026.pdf_p4]\nCompany IT Equipment Allowance Policy [handbook_2026.pdf_p1]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for [handbook_2026.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00012760000026901253,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q4",
+      "pipeline_type": "corrected",
+      "answer": "The company provides a $75 monthly wellness stipend for gym memberships, mental health apps, and fitness tracking equipment. [handbook_2026.pdf_p4_c0]\nEmployee Wellness Benefits [handbook_2026.pdf_p4_c0]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for purchasing laptops, monitors, and ergonomic accessories. [handbook_2026.pdf_p1_c0]\nOFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.25,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 1.6708240999996633,
+      "latency_seconds": 0.11573459999999614,
       "citations_cited": [
-        "handbook_2026.pdf_p4",
-        "handbook_2026.pdf_p1"
+        "handbook_2026.pdf_p4_c0",
+        "handbook_2026.pdf_p1_c0",
+        "reimbursement_receipt_scanned.pdf_p1_c0"
       ]
     },
     {
       "question_id": "Q5",
       "pipeline_type": "baseline",
-      "answer": "1. Hotel Accommodation: Due to increased hospitality costs, the maximum [travel_policy_v2_2026.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
       "retrieval_recall": 0.0,
-      "citation_correctness": 1.0,
-      "appropriate_abstention": 1.0,
-      "latency_seconds": 1.7597522999994908,
-      "citations_cited": [
-        "travel_policy_v2_2026.pdf_p1"
-      ]
-    },
-    {
-      "question_id": "Q6",
-      "pipeline_type": "baseline",
-      "answer": "Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [G_Surya_Resume.pdf_p1]\nGenerative AI Engineer building RAG systems and agentic workflows. [G_Surya_Resume.pdf_p1]\nGenerative AI Developer Intern Nov 2025 · May 2026 [G_Surya_Resume.pdf_p1]\nHiDevs Bangalore, India (Hybrid) [G_Surya_Resume.pdf_p1]\n· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, [G_Surya_Resume.pdf_p1]",
-      "confidence_status": "VERIFIED",
-      "hallucination_rate": 0.0,
-      "retrieval_recall": 0.0,
-      "citation_correctness": 1.0,
-      "appropriate_abstention": 1.0,
-      "latency_seconds": 1.9001490999999078,
-      "citations_cited": [
-        "G_Surya_Resume.pdf_p1"
-      ]
-    },
-    {
-      "question_id": "Q7",
-      "pipeline_type": "baseline",
-      "answer": "Company IT Equipment Allowance Policy [handbook_2026.pdf_p1]\nRevised Corporate Travel Guidelines (Version 2.0) [travel_policy_v2_2026.pdf_p1]\nNote: This policy supersedes Version 1.0 (2024). [travel_policy_v2_2026.pdf_p1]\nAnnual Leave and Carry-Over Policy [handbook_2026.pdf_p3]\nCorporate Travel Guidelines (Version 1.0) [travel_policy_v1_2024.pdf_p1]",
-      "confidence_status": "VERIFIED",
-      "hallucination_rate": 0.0,
-      "retrieval_recall": 0.0,
-      "citation_correctness": 1.0,
+      "citation_correctness": 0.0,
       "appropriate_abstention": 0.0,
-      "latency_seconds": 1.6797237000000678,
-      "citations_cited": [
-        "handbook_2026.pdf_p1",
-        "travel_policy_v2_2026.pdf_p1",
-        "handbook_2026.pdf_p3",
-        "travel_policy_v1_2024.pdf_p1"
-      ]
+      "latency_seconds": 0.00015720000010333024,
+      "citations_cited": []
     },
     {
-      "question_id": "Q8",
-      "pipeline_type": "baseline",
-      "answer": "Bangalore, India | +91 86672 34480 | iamsurya195@gmail.com [G_Surya_Resume.pdf_p1]\nGenerative AI Engineer building RAG systems and agentic workflows. [G_Surya_Resume.pdf_p1]\nGenerative AI Developer Intern Nov 2025 · May 2026 [G_Surya_Resume.pdf_p1]\nHiDevs Bangalore, India (Hybrid) [G_Surya_Resume.pdf_p1]\n· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, [G_Surya_Resume.pdf_p1]",
-      "confidence_status": "VERIFIED",
-      "hallucination_rate": 0.0,
-      "retrieval_recall": 0.0,
-      "citation_correctness": 1.0,
-      "appropriate_abstention": 0.0,
-      "latency_seconds": 1.8909328999998252,
-      "citations_cited": [
-        "G_Surya_Resume.pdf_p1"
-      ]
-    },
-    {
-      "question_id": "Q9",
-      "pipeline_type": "baseline",
-      "answer": "allowable hotel accommodation expense is now $250 per night. [travel_policy_v2_2026.pdf_p1]\nallowable hotel accommodation expense is $150 per night. [travel_policy_v1_2024.pdf_p1]\n1. Hotel Accommodation: When traveling on official business, the maximum [travel_policy_v1_2024.pdf_p1]\n1. Hotel Accommodation: Due to increased hospitality costs, the maximum [travel_policy_v2_2026.pdf_p1]\nNote: This policy supersedes Version 1.0 (2024). [travel_policy_v2_2026.pdf_p1]\nRevised Corporate Travel Guidelines (Version 2.0) [travel_policy_v2_2026.pdf_p1]\n2. Meal Per Diem: International meal per diem is updated to $95 per day. [travel_policy_v2_2026.pdf_p1]",
-      "confidence_status": "VERIFIED",
-      "hallucination_rate": 0.125,
-      "retrieval_recall": 1.0,
-      "citation_correctness": 1.0,
-      "appropriate_abstention": 1.0,
-      "latency_seconds": 1.9086503999997149,
-      "citations_cited": [
-        "travel_policy_v2_2026.pdf_p1",
-        "travel_policy_v1_2024.pdf_p1"
-      ]
-    },
-    {
-      "question_id": "Q10",
-      "pipeline_type": "baseline",
-      "answer": "2. Meal Per Diem: International meal per diem is capped at $65 per day. [travel_policy_v1_2024.pdf_p1]\n2. Meal Per Diem: International meal per diem is updated to $95 per day. [travel_policy_v2_2026.pdf_p1]\nRevised Corporate Travel Guidelines (Version 2.0) [travel_policy_v2_2026.pdf_p1]\nCorporate Travel Guidelines (Version 1.0) [travel_policy_v1_2024.pdf_p1]\nGenerative AI Developer Intern Nov 2025 · May 2026 [G_Surya_Resume.pdf_p1]\nEffective Date: January 1, 2026 [travel_policy_v2_2026.pdf_p1]\nNote: This policy supersedes Version 1.0 (2024). [travel_policy_v2_2026.pdf_p1]",
+      "question_id": "Q5",
+      "pipeline_type": "corrected",
+      "answer": "OFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]\n1. Hotel Accommodation: Due to increased hospitality costs, the maximum allowable hotel accommodation expense is now $250 per night. [travel_policy_v2_2026.pdf_p1_c0]",
       "confidence_status": "VERIFIED",
       "hallucination_rate": 0.19999999999999996,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 1.6470478999999614,
+      "latency_seconds": 0.1257722999998805,
       "citations_cited": [
-        "travel_policy_v1_2024.pdf_p1",
-        "travel_policy_v2_2026.pdf_p1",
-        "G_Surya_Resume.pdf_p1"
+        "reimbursement_receipt_scanned.pdf_p1_c0",
+        "travel_policy_v2_2026.pdf_p1_c0"
+      ]
+    },
+    {
+      "question_id": "Q6",
+      "pipeline_type": "baseline",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00014910000027157366,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q6",
+      "pipeline_type": "corrected",
+      "answer": "OFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]\nEmployees may work remotely on ad-hoc days subject to manager discretion and operational requirements. Approval processes and notification deadlines vary by department, project phase, and team sprint schedule. [remote_work_guidelines.pdf_p1_c0]\n· Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase review time by 40%. [G_Surya_Resume.pdf_p1_c2]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.16666666666666663,
+      "retrieval_recall": 1.0,
+      "citation_correctness": 1.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.4214957999993203,
+      "citations_cited": [
+        "reimbursement_receipt_scanned.pdf_p1_c0",
+        "remote_work_guidelines.pdf_p1_c0",
+        "G_Surya_Resume.pdf_p1_c2"
+      ]
+    },
+    {
+      "question_id": "Q7",
+      "pipeline_type": "baseline",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.00030109999897831585,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q7",
+      "pipeline_type": "corrected",
+      "answer": "There is insufficient information in the provided context to answer this query.",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.11682900000050722,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q8",
+      "pipeline_type": "baseline",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.00014109999938227702,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q8",
+      "pipeline_type": "corrected",
+      "answer": "There is insufficient information in the provided context to answer this query.",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.0977588999994623,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q9",
+      "pipeline_type": "baseline",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00018880000061471947,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q9",
+      "pipeline_type": "corrected",
+      "answer": "1. Hotel Accommodation: When traveling on official business, the maximum allowable hotel accommodation expense is $150 per night. [travel_policy_v1_2024.pdf_p1_c0]\n1. Hotel Accommodation: Due to increased hospitality costs, the maximum allowable hotel accommodation expense is now $250 per night. [travel_policy_v2_2026.pdf_p1_c0]\nRevised Corporate Travel Guidelines (Version 2.0) [travel_policy_v2_2026.pdf_p1_c0]\nNote: This policy supersedes Version 1.0 (2024). [travel_policy_v2_2026.pdf_p1_c0]\n2. Meal Per Diem: International meal per diem is updated to $95 per day. [travel_policy_v2_2026.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are permitted for any international flight exceeding 8 hours. [travel_policy_v2_2026.pdf_p1_c0]\nCorporate Travel Guidelines (Version 1.0) [travel_policy_v1_2024.pdf_p1_c0]\n2. Meal Per Diem: International meal per diem is capped at $65 per day. [travel_policy_v1_2024.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are only permitted for international flights exceeding 10 hours. [travel_policy_v1_2024.pdf_p1_c0]\nEmployees receive 20 days of paid annual leave per year. Up to 5 unused leave days can be carried over to the following calendar year. [handbook_2026.pdf_p3_c0]\nAll staff must be available for synchronous collaboration between 10:00 AM and 3:00 PM EST Monday through Friday. Flexible working is permitted outside these core collaboration bands. [handbook_2026.pdf_p2_c0]\nGenerative AI Developer Intern Nov 2025 · May 2026 [G_Surya_Resume.pdf_p1_c2]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.050000000000000044,
+      "retrieval_recall": 1.0,
+      "citation_correctness": 1.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.1275047999988601,
+      "citations_cited": [
+        "travel_policy_v1_2024.pdf_p1_c0",
+        "travel_policy_v2_2026.pdf_p1_c0",
+        "handbook_2026.pdf_p3_c0",
+        "handbook_2026.pdf_p2_c0",
+        "G_Surya_Resume.pdf_p1_c2"
+      ]
+    },
+    {
+      "question_id": "Q10",
+      "pipeline_type": "baseline",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
+      "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00013179999950807542,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q10",
+      "pipeline_type": "corrected",
+      "answer": "2. Meal Per Diem: International meal per diem is capped at $65 per day. [travel_policy_v1_2024.pdf_p1_c0]\n2. Meal Per Diem: International meal per diem is updated to $95 per day. [travel_policy_v2_2026.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are permitted for any international flight exceeding 8 hours. [travel_policy_v2_2026.pdf_p1_c0]\n1. Hotel Accommodation: When traveling on official business, the maximum allowable hotel accommodation expense is $150 per night. [travel_policy_v1_2024.pdf_p1_c0]\n3. Flight Eligibility: Business class flights are only permitted for international flights exceeding 10 hours. [travel_policy_v1_2024.pdf_p1_c0]\nGenerative AI Developer Intern Nov 2025 · May 2026 [G_Surya_Resume.pdf_p1_c2]\nRevised Corporate Travel Guidelines (Version 2.0) [travel_policy_v2_2026.pdf_p1_c0]\nEffective Date: January 1, 2026 [travel_policy_v2_2026.pdf_p1_c0]\nNote: This policy supersedes Version 1.0 (2024). [travel_policy_v2_2026.pdf_p1_c0]\n1. Hotel Accommodation: Due to increased hospitality costs, the maximum allowable hotel accommodation expense is now $250 per night. [travel_policy_v2_2026.pdf_p1_c0]\nCorporate Travel Guidelines (Version 1.0) [travel_policy_v1_2024.pdf_p1_c0]\nOFFICIAL REIMBURSEMENT INVOICE / RECEIPT VENDOR Apex Catering Services Inc. TAX ID 99-8877665 DATE: 2026-03-15 DESCRIPTION: Client Dinnéerand Team Lunch SUBTOTAL $440.00 TAX $45.50 TOTAL AMOUNT DUE $485.50 STATUS PAID BY CORPORATE CREDITCARD [reimbursement_receipt_scanned.pdf_p1_c0]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.052631578947368474,
+      "retrieval_recall": 1.0,
+      "citation_correctness": 1.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.11202930000035849,
+      "citations_cited": [
+        "travel_policy_v1_2024.pdf_p1_c0",
+        "travel_policy_v2_2026.pdf_p1_c0",
+        "G_Surya_Resume.pdf_p1_c2",
+        "reimbursement_receipt_scanned.pdf_p1_c0"
       ]
     },
     {
       "question_id": "Q11",
       "pipeline_type": "baseline",
-      "answer": "Employees may work remotely on ad-hoc days subject to manager discretion [remote_work_guidelines.pdf_p1]\nand operational requirements. Approval processes and notification deadlines [remote_work_guidelines.pdf_p1]\nand 3:00 PM EST Monday through Friday. Flexible working is permitted outside [handbook_2026.pdf_p2]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for [handbook_2026.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 1.0,
+      "latency_seconds": 0.00018449999879521783,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q11",
+      "pipeline_type": "corrected",
+      "answer": "Employees may work remotely on ad-hoc days subject to manager discretion and operational requirements. Approval processes and notification deadlines vary by department, project phase, and team sprint schedule. [remote_work_guidelines.pdf_p1_c0]\nAll staff must be available for synchronous collaboration between 10:00 AM and 3:00 PM EST Monday through Friday. Flexible working is permitted outside these core collaboration bands. [handbook_2026.pdf_p2_c0]\nRemote Work Guidelines and Ad-Hoc Arrangements [remote_work_guidelines.pdf_p1_c0]\nCore Working Hours Guidelines [handbook_2026.pdf_p2_c0]\nEvery full-time employee is entitled to a $1,500 annual hardware stipend for purchasing laptops, monitors, and ergonomic accessories. [handbook_2026.pdf_p1_c0]\nGenerative AI Engineer building RAG systems and agentic workflows. [G_Surya_Resume.pdf_p1_c1]\n· Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase review time by 40%. [G_Surya_Resume.pdf_p1_c2]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 1.0,
       "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 0.0,
-      "latency_seconds": 1.994734900000367,
+      "latency_seconds": 0.3544192000008479,
       "citations_cited": [
-        "remote_work_guidelines.pdf_p1",
-        "handbook_2026.pdf_p2",
-        "handbook_2026.pdf_p1"
+        "remote_work_guidelines.pdf_p1_c0",
+        "handbook_2026.pdf_p2_c0",
+        "handbook_2026.pdf_p1_c0",
+        "G_Surya_Resume.pdf_p1_c1",
+        "G_Surya_Resume.pdf_p1_c2"
       ]
     },
     {
       "question_id": "Q12",
       "pipeline_type": "baseline",
-      "answer": "HiDevs Bangalore, India (Hybrid) [G_Surya_Resume.pdf_p1]\n· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, [G_Surya_Resume.pdf_p1]\n· Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase rev [G_Surya_Resume.pdf_p1]",
-      "confidence_status": "VERIFIED",
+      "answer": "No verified context available to answer the query.",
+      "confidence_status": "UNVERIFIED",
       "hallucination_rate": 0.0,
-      "retrieval_recall": 0.8888888888888888,
+      "retrieval_recall": 0.0,
+      "citation_correctness": 0.0,
+      "appropriate_abstention": 0.0,
+      "latency_seconds": 0.00014680000094813295,
+      "citations_cited": []
+    },
+    {
+      "question_id": "Q12",
+      "pipeline_type": "corrected",
+      "answer": "· Built PeopleGPT / Aura AI Agent · RAG pipeline over 13,000+ profiles using Qdrant hybrid search, LangChain, FastAPI (SSE); cut manual search time by 70%. [G_Surya_Resume.pdf_p1_c2]\n· Built AI GitHub Repository Analyzer (AST checks, commit analysis, Gemini summaries); reduced codebase review time by 40%. [G_Surya_Resume.pdf_p1_c2]\n· Optimized Dave Chatbot latency from 10·15s to ~2.5s via code review; added streaming and MongoDB session persistence. [G_Surya_Resume.pdf_p1_c2]\nRemote Work Guidelines and Ad-Hoc Arrangements [remote_work_guidelines.pdf_p1_c0]\nEmployees may work remotely on ad-hoc days subject to manager discretion and operational requirements. Approval processes and notification deadlines vary by department, project phase, and team sprint schedule. [remote_work_guidelines.pdf_p1_c0]\nGenerative AI Engineer building RAG systems and agentic workflows. [G_Surya_Resume.pdf_p1_c1]\nCore Working Hours Guidelines [handbook_2026.pdf_p2_c0]\nAll staff must be available for synchronous collaboration between 10:00 AM and 3:00 PM EST Monday through Friday. Flexible working is permitted outside these core collaboration bands. [handbook_2026.pdf_p2_c0]",
+      "confidence_status": "VERIFIED",
+      "hallucination_rate": 0.09999999999999998,
+      "retrieval_recall": 1.0,
       "citation_correctness": 1.0,
       "appropriate_abstention": 1.0,
-      "latency_seconds": 1.8375567000002775,
+      "latency_seconds": 0.14923649999946065,
       "citations_cited": [
-        "G_Surya_Resume.pdf_p1"
+        "G_Surya_Resume.pdf_p1_c2",
+        "remote_work_guidelines.pdf_p1_c0",
+        "G_Surya_Resume.pdf_p1_c1",
+        "handbook_2026.pdf_p2_c0"
       ]
     }
   ]
