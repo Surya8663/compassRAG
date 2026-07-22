@@ -4,6 +4,7 @@ Implements a genuinely simpler retrieve-then-generate path with zero self-correc
 skipping contradiction detection, groundedness loops, query reformulation, and clarifying workflows.
 """
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -26,25 +27,19 @@ class BaselineRAGPipeline:
         self.retriever = get_hybrid_retriever()
         self.synthesizer = FlagshipSynthesizerService()
 
-    def run(
+    async def run_async(
         self,
         query: str,
         tenant_id: str = "eval_tenant",
         top_k: int = 5,
     ) -> dict[str, Any]:
         """
-        Executes baseline retrieval and synthesis.
-        Returns dictionary containing:
-            - answer (str)
-            - confidence_status (str)
-            - retrieved_chunks (list[DocumentChunk])
-            - citations (list[Citation])
-            - latency_seconds (float)
+        Asynchronously executes baseline retrieval and synthesis.
         """
         start_time = time.perf_counter()
 
         try:
-            raw_results, _, status, _ = self.retriever.retrieve(
+            raw_results, _, status, _ = await self.retriever.retrieve(
                 query=query, tenant_id=tenant_id, top_k=top_k
             )
             chunks = []
@@ -56,23 +51,49 @@ class BaselineRAGPipeline:
                 elif isinstance(item, dict):
                     chunks.append(DocumentChunk.model_validate(item))
         except Exception as exc:
-            logger.warning("Retriever search failed in baseline run: %s", exc)
-            chunks = []
-            status = "UNVERIFIED"
+            logger.error("Retriever search failed in baseline run for query '%s': %s", query, exc)
+            raise RuntimeError(f"Baseline retrieval infrastructure failed for query '{query}': {exc}") from exc
 
         try:
             answer, citations = self.synthesizer.synthesize(query=query, chunks=chunks)
         except Exception as exc:
-            logger.warning("Synthesizer failed in baseline run: %s", exc)
-            answer = "Error during baseline generation."
-            citations = []
+            logger.error("Synthesizer failed in baseline run: %s", exc)
+            raise RuntimeError(f"Baseline synthesizer failed for query '{query}': {exc}") from exc
+
+        # Fix baseline status for abstentions & clarifications
+        ans_lower = answer.lower()
+        status_str = str(status.value if hasattr(status, "value") else status)
+        if any(p in ans_lower for p in ["insufficient information", "no relevant context", "cannot provide", "no information"]):
+            status_str = "LOW_CONFIDENCE"
+        elif any(p in ans_lower for p in ["please clarify", "clarification", "depends on manager"]):
+            status_str = "CLARIFICATION_NEEDED"
 
         latency = time.perf_counter() - start_time
 
         return {
             "answer": answer,
-            "confidence_status": str(status.value if hasattr(status, "value") else status),
+            "confidence_status": status_str,
             "retrieved_chunks": chunks,
             "citations": citations,
             "latency_seconds": latency,
         }
+
+    def run(
+        self,
+        query: str,
+        tenant_id: str = "eval_tenant",
+        top_k: int = 5,
+    ) -> dict[str, Any]:
+        """
+        Executes baseline retrieval and synthesis synchronously.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            return loop.run_until_complete(self.run_async(query, tenant_id, top_k))
+        return asyncio.run(self.run_async(query, tenant_id, top_k))

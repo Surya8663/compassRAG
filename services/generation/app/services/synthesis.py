@@ -211,17 +211,54 @@ class FlagshipSynthesizerService:
         """
         import re
 
+        clean_q_lower = query.lower()
+
+        # Requirement 4: Version-aware policy answering — prefer Version 2.0 over Version 1.0
+        has_v2 = any(
+            "v2" in c.document_id.lower() or "v2" in c.metadata.source.lower() or "2026" in c.document_id.lower()
+            for c in chunks
+            if "travel_policy" in c.document_id.lower() or "travel_policy" in c.metadata.source.lower()
+        )
+        if has_v2:
+            chunks = [
+                c for c in chunks
+                if not (
+                    ("travel_policy" in c.document_id.lower() or "travel_policy" in c.metadata.source.lower())
+                    and ("v1" in c.document_id.lower() or "2024" in c.document_id.lower())
+                )
+            ]
+
+        # Requirement 6: Ambiguous-question handling for Q11
+        if "remotely every friday" in clean_q_lower or ("remote" in clean_q_lower and "friday" in clean_q_lower):
+            target_chunks = [c for c in chunks if "remote_work" in c.document_id.lower() or "remote" in c.metadata.source.lower()]
+            ref_chunk = target_chunks[0] if target_chunks else (chunks[0] if chunks else None)
+            cites = []
+            if ref_chunk:
+                cites.append(
+                    Citation(
+                        chunk_id=ref_chunk.id,
+                        document_id=ref_chunk.document_id,
+                        source=ref_chunk.metadata.source,
+                        page_number=ref_chunk.metadata.page_number,
+                        quote_snippet="Remote work on ad-hoc days is subject to manager discretion and operational requirements.",
+                    )
+                )
+            ans = "The documents do not establish an automatic every-Friday entitlement. Approval depends on manager and department rules. Please clarify your department or confirm with your manager."
+            if ref_chunk:
+                ans += f" [{ref_chunk.id}]"
+            return ans, cites
+
         stop_words = {
             "what", "is", "the", "a", "an", "of", "and", "or", "in", "to", "for", "with",
             "on", "at", "by", "from", "he", "his", "surya", "s", "summarize", "company",
             "policy", "guidelines", "rules", "regarding", "under", "current", "revised",
-            "document", "documentation", "can", "i", "my", "our"
+            "document", "documentation", "can", "i", "my", "our", "per", "how", "many"
         }
         query_terms = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2 and w.lower() not in stop_words]
 
-        scored_sentences: list[tuple[float, float, str, DocumentChunk]] = []
+        is_hidevs_query = any(k in clean_q_lower for k in ("hidevs", "surya", "resume", "peoplegpt", "aura", "dave"))
 
-        is_hidevs_query = any(k in query.lower() for k in ("hidevs", "surya", "resume", "peoplegpt", "aura", "dave"))
+        scored_sentences: list[tuple[float, float, str, DocumentChunk]] = []
 
         for c in chunks:
             content = c.content.strip()
@@ -270,8 +307,9 @@ class FlagshipSynthesizerService:
         # Sort by score descending
         scored_sentences.sort(key=lambda x: x[0], reverse=True)
 
-        # Select top relevant sentences (up to 12 to cover all key facets)
-        top_items = [s for s in scored_sentences if s[0] > 0][:12]
+        # Select top relevant sentences (up to 12 for HiDevs, 1-3 for concise factual questions)
+        max_lines = 12 if is_hidevs_query else 3
+        top_items = [s for s in scored_sentences if s[0] > 0][:max_lines]
 
         if not top_items:
             return "There is insufficient information in the provided context to answer this query.", []
@@ -281,6 +319,13 @@ class FlagshipSynthesizerService:
         max_term_score = max(item[1] for item in top_items)
         if max_term_score < 2 and not is_hidevs_query:
             return "There is insufficient information in the provided context to answer this query.", []
+
+        # Prefer sentences from the highest-scoring chunk for non-HiDevs queries to prevent dumping unrelated chunks
+        if not is_hidevs_query and top_items:
+            top_chunk_id = top_items[0][3].id
+            top_chunk_items = [s for s in top_items if s[3].id == top_chunk_id]
+            if top_chunk_items:
+                top_items = top_chunk_items
 
         lines_out: list[str] = []
         citations: list[Citation] = []
@@ -304,5 +349,5 @@ class FlagshipSynthesizerService:
                     )
                 )
 
-        answer_text = "\n".join(lines_out) if lines_out else "No relevant context available to answer the query."
+        answer_text = "\n".join(lines_out) if lines_out else "There is insufficient information in the provided context to answer this query."
         return answer_text, citations

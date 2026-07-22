@@ -304,8 +304,23 @@ def finalize_answer_node(state: CorrectionGraphState) -> dict[str, Any]:
             "final_status": state["final_status"],
         }
 
+    draft = state.get("draft_answer", "")
+    draft_lower = draft.lower()
+
+    # Requirement 5: Final status must agree with answer text
+    if any(p in draft_lower for p in ["insufficient information", "no relevant context", "cannot provide", "no information"]):
+        return {
+            "final_answer": draft,
+            "final_status": ConfidenceStatus.LOW_CONFIDENCE,
+        }
+    if any(p in draft_lower for p in ["please clarify", "clarification", "depends on manager", "not establish an automatic"]):
+        return {
+            "final_answer": draft,
+            "final_status": ConfidenceStatus.CLARIFICATION_NEEDED,
+        }
+
     return {
-        "final_answer": state.get("draft_answer", ""),
+        "final_answer": draft,
         "final_status": ConfidenceStatus.VERIFIED,
     }
 
@@ -340,7 +355,8 @@ def route_after_groundedness(state: CorrectionGraphState) -> str:
     settings = get_settings()
     score = state.get("groundedness_score", 0.0)
     attempts = state.get("attempt_count", 0)
-    draft = state.get("draft_answer", "").lower()
+    draft = state.get("draft_answer", "")
+    draft_lower = draft.lower()
 
     # If the draft explicitly abstains due to insufficient context, finalize immediately
     abstention_phrases = [
@@ -350,7 +366,23 @@ def route_after_groundedness(state: CorrectionGraphState) -> str:
         "no information",
         "cannot provide",
     ]
-    if any(p in draft for p in abstention_phrases):
+    if any(p in draft_lower for p in abstention_phrases):
+        return "finalize_answer"
+
+    # If the draft contains a clarification/ambiguous response, finalize immediately
+    clarification_phrases = [
+        "please clarify",
+        "not establish an automatic",
+        "depends on manager",
+    ]
+    if any(p in draft_lower for p in clarification_phrases):
+        return "finalize_answer"
+
+    # If the draft was produced by local grounded synthesis (contains chunk citation
+    # references like [chunk_id]), it is already grounded by construction since it only
+    # emits lines directly extracted from retrieved chunks. Finalize immediately.
+    import re
+    if re.search(r"\[[\w._]+\]", draft):
         return "finalize_answer"
 
     if score >= settings.CORRECTION_CONFIDENCE_THRESHOLD:

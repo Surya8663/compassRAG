@@ -290,7 +290,7 @@ class EvaluationRunnerService:
             # CRITICAL FIX: Append corr_res immediately inside question loop
             results.append(corr_res)
 
-        # STRICT ASSERTIONS ON RESULT COUNTS
+        # STRICT ASSERTIONS ON RESULT COUNTS AND INFRASTRUCTURE
         base_runs = [r for r in results if r.pipeline_type == "baseline"]
         corr_runs = [r for r in results if r.pipeline_type == "corrected"]
 
@@ -299,22 +299,62 @@ class EvaluationRunnerService:
         assert len(results) == 24, f"Expected exactly 24 total QuestionEvaluationResult objects, got {len(results)}"
         logger.info("All 24 evaluation results successfully collected and verified!")
 
-        # QUESTION-SPECIFIC ASSERTIONS REQUIRED BY BENCHMARK
+        # MAP RESULTS FOR GRANULAR ASSERTIONS
+        qmap_base = {r.question_id: r for r in base_runs}
         qmap_corr = {r.question_id: r for r in corr_runs}
 
-        # Q5 & Q6 prove OCR retrieval
+        # 1. BASELINE RETRIEVAL ASSERTIONS
+        base_avg_recall = sum(r.retrieval_recall for r in base_runs) / len(base_runs)
+        assert base_avg_recall > 0.0, f"Baseline average retrieval recall must be > 0 (got {base_avg_recall})"
+
+        base_avg_latency = sum(r.latency_seconds for r in base_runs) / len(base_runs)
+        assert base_avg_latency > 0.01, f"Baseline average latency must not be near zero (got {base_avg_latency}s)"
+
+        answerable_qids = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q9", "Q10", "Q12"]
+        for qid in answerable_qids:
+            b_res = qmap_base.get(qid)
+            assert b_res is not None, f"Baseline result missing for {qid}"
+            assert b_res.retrieval_recall > 0.0, f"Baseline {qid} must retrieve at least one expected chunk"
+            assert "No verified context available" not in b_res.answer, f"Baseline {qid} must not return 'No verified context available'"
+
+        # 2. CORRECTED OCR RETRIEVAL (Q5 & Q6)
         for qid in ["Q5", "Q6"]:
             q_res = qmap_corr.get(qid)
             assert q_res is not None, f"Result missing for {qid}"
-            assert q_res.retrieval_recall > 0, f"{qid} must successfully retrieve OCR receipt chunks"
+            assert q_res.retrieval_recall > 0.0, f"{qid} must successfully retrieve OCR receipt chunks"
 
-        # Q7 & Q8 appropriate abstention
+        # 3. CORRECTED ABSTENTION (Q7 & Q8 must abstain with non-VERIFIED status)
         for qid in ["Q7", "Q8"]:
             q_res = qmap_corr.get(qid)
             assert q_res is not None, f"Result missing for {qid}"
+            assert q_res.confidence_status in ("LOW_CONFIDENCE", "INSUFFICIENT_INFORMATION"), (
+                f"{qid} must abstain with non-VERIFIED status (got {q_res.confidence_status})"
+            )
             assert q_res.appropriate_abstention == 1.0, f"{qid} must appropriately abstain on unanswerable queries"
 
-        # Q12 HiDevs experience
+        # 4. VERSION 2.0 POLICY (Q9 & Q10)
+        q9_res = qmap_corr.get("Q9")
+        assert q9_res is not None, "Result missing for Q9"
+        assert "250" in q9_res.answer, f"Q9 must use $250 policy (got '{q9_res.answer}')"
+        assert all("v1" not in c.lower() and "2024" not in c.lower() for c in q9_res.citations_cited), (
+            "Q9 must cite only Version 2.0 policy"
+        )
+
+        q10_res = qmap_corr.get("Q10")
+        assert q10_res is not None, "Result missing for Q10"
+        assert "95" in q10_res.answer, f"Q10 must use $95 policy (got '{q10_res.answer}')"
+        assert all("v1" not in c.lower() and "2024" not in c.lower() for c in q10_res.citations_cited), (
+            "Q10 must cite only Version 2.0 policy"
+        )
+
+        # 5. AMBIGUOUS QUESTION (Q11)
+        q11_res = qmap_corr.get("Q11")
+        assert q11_res is not None, "Result missing for Q11"
+        assert q11_res.confidence_status in ("CLARIFICATION_NEEDED", "LOW_CONFIDENCE"), (
+            f"Q11 status must be CLARIFICATION_NEEDED or LOW_CONFIDENCE (got {q11_res.confidence_status})"
+        )
+
+        # 6. HIDEVS EXPERIENCE (Q12)
         q12_res = qmap_corr.get("Q12")
         assert q12_res is not None, "Result missing for Q12"
         q12_ans_lower = q12_res.answer.lower()
@@ -336,7 +376,6 @@ class EvaluationRunnerService:
 
         base_halluc = avg([r.hallucination_rate for r in base_res])
         corr_halluc = avg([r.hallucination_rate for r in corr_res])
-        halluc_diff = corr_halluc - base_halluc
         halluc_imp = (
             ((base_halluc - corr_halluc) / base_halluc * 100.0) if base_halluc > 0 else 0.0
         )
@@ -379,14 +418,29 @@ class EvaluationRunnerService:
     def export_report(self, report: EvaluationSummaryReport) -> tuple[Path, Path]:
         """
         Exports the evaluation summary report as both structured JSON and formatted Markdown table.
-        Returns paths (`json_path`, `md_path`).
+        Returns paths (`root_json_path`, `root_md_path`).
         """
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        root_dir = Path(__file__).resolve().parent.parent.parent.parent
+        # Requirement 2: Correct repository-root path using .parents[4]
+        root_dir = Path(__file__).resolve().parents[4]
         json_path = REPORTS_DIR / "evaluation_comparison_report.json"
         md_path = REPORTS_DIR / "evaluation_comparison_report.md"
         root_json_path = root_dir / "evaluation_results.json"
         root_md_path = root_dir / "evaluation_report.md"
+
+        # Delete stale duplicate reports in services/ if present
+        stale_json = root_dir / "services" / "evaluation_results.json"
+        stale_md = root_dir / "services" / "evaluation_report.md"
+        if stale_json.exists():
+            try:
+                stale_json.unlink()
+            except Exception:
+                pass
+        if stale_md.exists():
+            try:
+                stale_md.unlink()
+            except Exception:
+                pass
 
         json_str = report.model_dump_json(indent=2)
         with open(json_path, "w", encoding="utf-8") as f:
@@ -398,12 +452,29 @@ class EvaluationRunnerService:
             report.corrected_avg_latency_seconds
             - report.baseline_avg_latency_seconds
         )
-        halluc_diff = report.corrected_avg_hallucination_rate - report.baseline_avg_hallucination_rate
-        halluc_direction = "reduction" if halluc_diff <= 0 else "increase"
+
+        def format_metric_diff(base_val: float, corr_val: float, lower_is_better: bool = False) -> str:
+            diff = corr_val - base_val
+            diff_pts = diff * 100.0
+            if base_val == 0.0:
+                if corr_val == 0.0:
+                    return "0.00 percentage points (N/A relative)"
+                elif diff > 0:
+                    return f"Increase from {base_val:.2%} to {corr_val:.2%} (+{diff_pts:.2f} percentage points, N/A relative)"
+                else:
+                    return f"Decrease from {base_val:.2%} to {corr_val:.2%} ({diff_pts:.2f} percentage points, N/A relative)"
+            rel_pct = (diff / base_val) * 100.0
+            direction = "reduction" if (lower_is_better and diff <= 0) else ("increase" if diff > 0 else "decrease")
+            return f"{diff_pts:+.2f} percentage points ({rel_pct:+.1f}% {direction})"
 
         # Load golden dataset questions map for categories
         dataset = load_golden_dataset()
         q_cat_map = {q.id: q.category for q in dataset}
+
+        halluc_str = format_metric_diff(report.baseline_avg_hallucination_rate, report.corrected_avg_hallucination_rate, lower_is_better=True)
+        recall_str = format_metric_diff(report.baseline_avg_retrieval_recall, report.corrected_avg_retrieval_recall)
+        cit_str = format_metric_diff(report.baseline_avg_citation_correctness, report.corrected_avg_citation_correctness)
+        abs_str = format_metric_diff(report.baseline_appropriate_abstention_rate, report.corrected_appropriate_abstention_rate)
 
         # Render Markdown side-by-side comparison report
         md_lines = [
@@ -414,41 +485,13 @@ class EvaluationRunnerService:
             "## Summary Comparison Table\n",
             "| Metric | Baseline RAG | Self-Correcting RAG | Difference |",
             "| :--- | :---: | :---: | :---: |",
-            (
-                f"| **Hallucination Rate** (Lower is better) | "
-                f"`{report.baseline_avg_hallucination_rate:.2%}` | "
-                f"`{report.corrected_avg_hallucination_rate:.2%}` | "
-                f"**{abs(report.hallucination_improvement_pct):.1f}%** {halluc_direction} |"
-            ),
-            (
-                f"| **Retrieval Recall** (Higher is better) | "
-                f"`{report.baseline_avg_retrieval_recall:.2%}` | "
-                f"`{report.corrected_avg_retrieval_recall:.2%}` | "
-                f"`{report.retrieval_recall_improvement_pct:+.1f}%` relative |"
-            ),
-            (
-                f"| **Citation Correctness** (Higher is better) | "
-                f"`{report.baseline_avg_citation_correctness:.2%}` | "
-                f"`{report.corrected_avg_citation_correctness:.2%}` | "
-                f"`{report.citation_correctness_improvement_pct:+.1f}%` relative |"
-            ),
-            (
-                f"| **Appropriate Abstention Rate** (Higher is better) | "
-                f"`{report.baseline_appropriate_abstention_rate:.2%}` | "
-                f"`{report.corrected_appropriate_abstention_rate:.2%}` | "
-                f"`{report.abstention_improvement_pct:+.1f}%` relative |"
-            ),
-            (
-                f"| **Average Latency per Question** | "
-                f"`{report.baseline_avg_latency_seconds:.3f}s` | "
-                f"`{report.corrected_avg_latency_seconds:.3f}s` | "
-                f"`{lat_diff:+.3f}s` |"
-            ),
+            f"| **Hallucination Rate** (Lower is better) | `{report.baseline_avg_hallucination_rate:.2%}` | `{report.corrected_avg_hallucination_rate:.2%}` | `{halluc_str}` |",
+            f"| **Retrieval Recall** (Higher is better) | `{report.baseline_avg_retrieval_recall:.2%}` | `{report.corrected_avg_retrieval_recall:.2%}` | `{recall_str}` |",
+            f"| **Citation Correctness** (Higher is better) | `{report.baseline_avg_citation_correctness:.2%}` | `{report.corrected_avg_citation_correctness:.2%}` | `{cit_str}` |",
+            f"| **Appropriate Abstention Rate** (Higher is better) | `{report.baseline_appropriate_abstention_rate:.2%}` | `{report.corrected_appropriate_abstention_rate:.2%}` | `{abs_str}` |",
+            f"| **Average Latency per Question** | `{report.baseline_avg_latency_seconds:.3f}s` | `{report.corrected_avg_latency_seconds:.3f}s` | `{lat_diff:+.3f}s` |",
             "\n## Per-Question Granular Results\n",
-            (
-                "| QID | Category | Baseline Status | Corrected Status | "
-                "Baseline Halluc | Corrected Halluc | Baseline Answer | Corrected Answer |"
-            ),
+            "| QID | Category | Baseline Status | Corrected Status | Baseline Halluc | Corrected Halluc | Baseline Answer | Corrected Answer |",
             "| :---: | :--- | :---: | :---: | :---: | :---: | :--- | :--- |",
         ]
 
@@ -465,7 +508,6 @@ class EvaluationRunnerService:
 
         for qid in sorted(qmap_base.keys(), key=lambda x: int(x[1:]) if x[1:].isdigit() else 0):
             b_res = qmap_base[qid]
-            # STRICT FIX: Raise KeyError if corrected result is missing instead of fallback
             if qid not in qmap_corr:
                 raise KeyError(f"Corrected evaluation result missing for question {qid}")
             c_res = qmap_corr[qid]
